@@ -177,6 +177,9 @@ type
     procedure Init(AData: Pointer); override;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvBalloonHint = class(TJvComponent)
   private
     FHint: TJvBalloonWindowEx;
@@ -401,14 +404,17 @@ end;
 
 function IsWinXP_UP: Boolean;
 begin
-  Result := (Win32Platform = VER_PLATFORM_WIN32_NT) and
-    ((Win32MajorVersion > 5) or
-    (Win32MajorVersion = 5) and (Win32MinorVersion >= 1));
+  Result := (Win32Platform = VER_PLATFORM_WIN32_NT) and CheckWin32Version(5, 1);
 end;
 
 function IsWinVista_UP: Boolean;
 begin
-  Result := (Win32Platform = VER_PLATFORM_WIN32_NT) and (Win32MajorVersion >= 6);
+  Result := (Win32Platform = VER_PLATFORM_WIN32_NT) and CheckWin32Version(6, 0);
+end;
+
+function IsWinSeven_UP: Boolean;
+begin
+  Result := (Win32Platform = VER_PLATFORM_WIN32_NT) and CheckWin32Version(6, 1);
 end;
 
 function InternalClientToParent(AControl: TControl; const Point: TPoint;
@@ -432,7 +438,7 @@ var
 {$ENDIF JVCLThemesEnabled}
 begin
   {$IFDEF JVCLThemesEnabled}
-  if IsWinVista_UP and ThemeServices.ThemesEnabled then
+  if IsWinVista_UP and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     Result := GetThemeEnumValue(ThemeServices.Theme[teToolTip], TTP_BALLOONTITLE, 0,
       TMT_TEXTCOLOR, AThemedTextColor) = S_OK;
@@ -581,9 +587,8 @@ begin
   UpdateBoundsRect(Rect);
   Dec(Rect.Bottom, 4);
 
-  with GlobalCtrl do
-    if ahPlaySound in MainCtrl.ApplicationHintOptions then
-      PlaySound(MainCtrl.DefaultIcon);
+  if ahPlaySound in GlobalCtrl.MainCtrl.ApplicationHintOptions then
+    GlobalCtrl.PlaySound(GlobalCtrl.MainCtrl.DefaultIcon);
   if IsWinVista_UP and (GetComCtlVersion < ComCtlVersionIE6) then
   begin
     OldAnimateWindowProc := AnimateWindowProc;
@@ -603,6 +608,7 @@ var
   NewPosition: TJvBalloonPosition;
   ScreenRect: TRect;
   LStemPointPosition: TPoint;
+  Pt: TPoint;
 begin
   { bpAuto returns the same value as bpLeftDown; bpLeftDown is choosen
     arbitrary }
@@ -626,8 +632,8 @@ begin
      |---------------|
 
   }
-  with GetStemPointPositionInRect(ARect) do
-    LStemPointPosition := Point(X * 2, Y * 2);
+  Pt := GetStemPointPositionInRect(ARect);
+  LStemPointPosition := Point(Pt.X * 2, Pt.Y * 2);
 
   if LStemPointPosition.Y < ScreenRect.Top + ScreenRect.Bottom then
   begin
@@ -651,14 +657,14 @@ begin
   if NewPosition <> FCurrentPosition then
   begin
     { Reset the offset.. }
-    with CalcOffset(ARect) do
-      OffsetRect(ARect, -X, -Y);
+    Pt := CalcOffset(ARect);
+    OffsetRect(ARect, -Pt.X, -Pt.Y);
 
     FCurrentPosition := NewPosition;
 
     { ..and set the offset }
-    with CalcOffset(ARect) do
-      OffsetRect(ARect, X, Y);
+    Pt := CalcOffset(ARect);
+    OffsetRect(ARect, Pt.X, Pt.Y);
   end;
 end;
 
@@ -685,6 +691,7 @@ function TJvBalloonWindow.CalcHintRectW(MaxWidth: Integer;
 var
   ASize: TSize;
   StemSize: TJvStemSize;
+  Pt: TPoint;
 begin
   FUseRegion := False;
   Init(AData);
@@ -717,7 +724,7 @@ begin
     if IsWinVista_UP then
     begin
       {$IFDEF JVCLThemesEnabled}
-      if ThemeServices.ThemesEnabled then
+      if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
         OffsetRect(FMsgRect, 12, Max(9, FHeaderRect.Bottom))
       else
       {$ENDIF JVCLThemesEnabled}
@@ -754,7 +761,7 @@ begin
   end;
 
   {$IFDEF JVCLThemesEnabled}
-  if IsWinVista_UP and ThemeServices.ThemesEnabled and FIsMultiLineMsg then
+  if IsWinVista_UP and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and FIsMultiLineMsg then
   begin
     GetThemePartSize(ThemeServices.Theme[teToolTip], 0, TTP_BALLOONSTEM, cBalloonStemState[FCurrentPosition],
       nil, TS_TRUE, ASize);
@@ -783,7 +790,7 @@ begin
   if FShowCloseBtn then
   begin
     {$IFDEF JVCLThemesEnabled}
-    if IsWinXP_UP and ThemeServices.ThemesEnabled then
+    if IsWinXP_UP and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
       GetThemePartSize(ThemeServices.Theme[teToolTip], 0, TTP_CLOSE, TTCS_NORMAL,
         nil, TS_DRAW, ASize)
     else
@@ -812,8 +819,8 @@ begin
   end;
 
   UnionRect(Result, FRoundRect, FStemRect);
-  with CalcOffset(Result) do
-    OffsetRect(Result, X, Y);
+  Pt := CalcOffset(Result);
+  OffsetRect(Result, Pt.X, Pt.Y);
 
   OffsetRect(FCloseBtnRect, FRoundRect.Right - (FCloseBtnRect.Right - FCloseBtnRect.Left) - 6, 6);
   FUseRegion := True;
@@ -821,25 +828,25 @@ end;
 
 function TJvBalloonWindow.CalcOffset(const ARect: TRect): TPoint;
 begin
-  with ARect do
-    case FCurrentPosition of
-      { bpAuto returns the same value as bpLeftDown; bpLeftDown is choosen
-        arbitrary }
-      bpAuto, bpLeftDown:
-        Result := Point(Left - Right + FTipDelta, 0);
-      bpRightDown:
-        Result := Point(-FTipDelta, 0);
-      bpLeftUp:
-        Result := Point(Left - Right + FTipDelta, Top - Bottom - FSwitchHeight);
-      bpRightUp:
-        Result := Point(-FTipDelta, Top - Bottom - FSwitchHeight);
-    end;
+  case FCurrentPosition of
+    { bpAuto returns the same value as bpLeftDown; bpLeftDown is choosen
+      arbitrary }
+    bpAuto, bpLeftDown:
+      Result := Point(ARect.Left - ARect.Right + FTipDelta, 0);
+    bpRightDown:
+      Result := Point(-FTipDelta, 0);
+    bpLeftUp:
+      Result := Point(ARect.Left - ARect.Right + FTipDelta, ARect.Top - ARect.Bottom - FSwitchHeight);
+    bpRightUp:
+      Result := Point(-FTipDelta, ARect.Top - ARect.Bottom - FSwitchHeight);
+  end;
 end;
 
 procedure TJvBalloonWindow.CheckPosition(var ARect: TRect);
 var
   NewPosition: TJvBalloonPosition;
   ScreenRect: TRect;
+  Pt: TPoint;
 begin
   if FCurrentPosition = bpAuto then
     CalcAutoPosition(ARect);
@@ -883,39 +890,39 @@ begin
   if NewPosition <> FCurrentPosition then
   begin
     { Reset the offset.. }
-    with CalcOffset(ARect) do
-      OffsetRect(ARect, -X, -Y);
+    Pt := CalcOffset(ARect);
+    OffsetRect(ARect, -Pt.X, -Pt.Y);
     FCurrentPosition := NewPosition;
 
     { ..and set the offset }
-    with CalcOffset(ARect) do
-      OffsetRect(ARect, X, Y);
+    Pt := CalcOffset(ARect);
+    OffsetRect(ARect, Pt.X, Pt.Y);
   end;
   { final adjustment - just make sure no part is disappearing outside the top/left edge }
   if ARect.Left < ScreenRect.Left then
   begin
-    with CalcOffset(ARect) do
-      OffsetRect(ARect, -X, -Y);
+    Pt := CalcOffset(ARect);
+    OffsetRect(ARect, -Pt.X, -Pt.Y);
     if FCurrentPosition = bpLeftUp then
       FCurrentPosition := bpRightUp
     else
     if FCurrentPosition = bpLeftDown then
       FCurrentPosition := bpRightDown;
-    with CalcOffset(ARect) do
-      OffsetRect(ARect, X, Y);
+    Pt := CalcOffset(ARect);
+    OffsetRect(ARect, Pt.X, Pt.Y);
   end;
 
   if ARect.Top < ScreenRect.Top then
   begin
-    with CalcOffset(ARect) do
-      OffsetRect(ARect, -X, -Y);
+    Pt := CalcOffset(ARect);
+    OffsetRect(ARect, -Pt.X, -Pt.Y);
     if FCurrentPosition = bpLeftUp then
       FCurrentPosition := bpLeftDown
     else
     if FCurrentPosition = bpRightUp then
       FCurrentPosition := bpRightDown;
-    with CalcOffset(ARect) do
-      OffsetRect(ARect, X, Y);
+    Pt := CalcOffset(ARect);
+    OffsetRect(ARect, Pt.X, Pt.Y);
   end;
 
   case FCurrentPosition of
@@ -966,7 +973,7 @@ begin
     begin
       WindowClass.Style := WindowClass.Style or CS_DROPSHADOW;
       {$IFDEF JVCLThemesEnabled}
-      if IsWinVista_UP and ThemeServices.ThemesEnabled then
+      if not IsWinSeven_UP and IsWinVista_UP and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
         ExStyle := ExStyle or WS_EX_LAYERED;
       {$ENDIF JVCLThemesEnabled}
     end
@@ -1073,17 +1080,16 @@ function TJvBalloonWindow.GetStemPointPositionInRect(const ARect: TRect): TPoint
 begin
   { bpAuto returns the same value as bpLeftDown; bpLeftDown is choosen
     arbitrary }
-  with ARect do
-    case FCurrentPosition of
-      bpAuto, bpLeftDown:
-        Result := Point(Right - FTipDelta, Top);
-      bpRightDown:
-        Result := Point(Left + FTipDelta, Top);
-      bpLeftUp:
-        Result := Point(Right - FTipDelta, Bottom);
-      bpRightUp:
-        Result := Point(Left + FTipDelta, Bottom);
-    end;
+  case FCurrentPosition of
+    bpAuto, bpLeftDown:
+      Result := Point(ARect.Right - FTipDelta, ARect.Top);
+    bpRightDown:
+      Result := Point(ARect.Left + FTipDelta, ARect.Top);
+    bpLeftUp:
+      Result := Point(ARect.Right - FTipDelta, ARect.Bottom);
+    bpRightUp:
+      Result := Point(ARect.Left + FTipDelta, ARect.Bottom);
+  end;
 end;
 
 procedure TJvBalloonWindow.Init(AData: Pointer);
@@ -1175,8 +1181,7 @@ end;
 procedure TJvBalloonWindow.Paint;
 begin
   if FShowIcon then
-    with FIconPos do
-      GlobalCtrl.DrawHintImage(Canvas, X, Y, Color);
+    GlobalCtrl.DrawHintImage(Canvas, FIconPos.X, FIconPos.Y, Color);
 
   if FMsg > '' then
   begin
@@ -1202,7 +1207,7 @@ begin
     Exit;
 
   {$IFDEF JVCLThemesEnabled}
-  if IsWinVista_UP and ThemeServices.ThemesEnabled and FIsMultiLineMsg then
+  if IsWinVista_UP and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and FIsMultiLineMsg then
     Region := CreateThemedRegion
   else
   {$ENDIF JVCLThemesEnabled}
@@ -1227,7 +1232,7 @@ var
   {$ENDIF JVCLThemesEnabled}
 begin
   {$IFDEF JVCLThemesEnabled}
-  if IsWinVista_UP and ThemeServices.ThemesEnabled then
+  if IsWinVista_UP and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     if FIsMultiLineMsg then
     begin
@@ -1549,13 +1554,13 @@ begin
     Exit;
 
   LParentForm := GetParentForm(ACtrl);
-  with ACtrl, FData do
+  with FData do
   begin
     RAnchorWindow := LParentForm;
     if LParentForm = ACtrl then
-      RAnchorPosition := Point(Width div 2, ClientHeight)
+      RAnchorPosition := Point(ACtrl.Width div 2, ACtrl.ClientHeight)
     else
-      RAnchorPosition := InternalClientToParent(ACtrl, Point(Width div 2, Height), LParentForm);
+      RAnchorPosition := InternalClientToParent(ACtrl, Point(ACtrl.Width div 2, ACtrl.Height), LParentForm);
 
     RSwitchHeight := ACtrl.Height;
   end;
@@ -1568,6 +1573,7 @@ var
   Rect: TRect;
   Animate: BOOL;
   TmpMaxWidth: Integer;
+  Pt: TPoint;
 begin
   with FData do
   begin
@@ -1619,11 +1625,12 @@ begin
 
     { Offset the rectangle to the anchor position }
     if Assigned(RAnchorWindow) then
-      with RAnchorWindow.ClientToScreen(RAnchorPosition) do
-        OffsetRect(Rect, X, Y)
+    begin
+      Pt := RAnchorWindow.ClientToScreen(RAnchorPosition);
+      OffsetRect(Rect, Pt.X, Pt.Y)
+    end
     else
-      with RAnchorPosition do
-        OffsetRect(Rect, X, Y);
+      OffsetRect(Rect, RAnchorPosition.X, RAnchorPosition.Y);
 
     if boPlaySound in Options then
       GlobalCtrl.PlaySound(RIconKind);
@@ -2120,8 +2127,7 @@ begin
 
   BoundRect(Rect, DesktopRect);
 
-  with Rect do
-    SetBounds(Left, Top, Right - Left, Bottom - Top);
+  SetBounds(Rect.Left, Rect.Top, Rect.Right - Rect.Left, Rect.Bottom - Rect.Top);
   UpdateRegion;
 
   { Set the Z order of the balloon }
@@ -2202,7 +2208,7 @@ begin
   if FShowCloseBtn then
   begin
     {$IFDEF JVCLThemesEnabled}
-    if ThemeServices.ThemesEnabled then
+    if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
     begin
       if (FCloseState and DFCS_PUSHED > 0) and (FCloseState and DFCS_HOT = 0) then
         Button := tttCloseNormal

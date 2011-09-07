@@ -69,11 +69,13 @@ type
   public
     constructor Create; // Create the video format
     procedure Update;   // Update from the AVICap window
-    property Width: Cardinal read FWidth;
-    property Height: Cardinal read FHeight;
-    property BitDepth: Cardinal read FBitDepth;
+    function Apply: Boolean; // apply the format to the window, returns True if successfull
+
+    property Width: Cardinal read FWidth write FWidth;
+    property Height: Cardinal read FHeight write FHeight;
+    property BitDepth: Cardinal read FBitDepth write FBitDepth;
     property PixelFormat: TPixelFormat read FPixelFormat;
-    property Compression: Integer read FCompression;
+    property Compression: Integer read FCompression write FCompression;
   end;
 
   // The audio format used by the device
@@ -330,6 +332,9 @@ type
 
   // the main component. Just drop it on a form or a frame, set the driver property, set previewing to
   // True and you should see the video coming through (even in design mode !)
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvAVICapture = class(TWinControl)
   protected
     FCaptureSettings: TJvCaptureSettings; // the capture settings
@@ -733,6 +738,22 @@ end;
 
 //=== { TJvVideoFormat } =====================================================
 
+function TJvVideoFormat.Apply: Boolean;
+var
+  BmpInfo: BITMAPINFOHEADER;
+begin
+  Result := False;
+  if FHWnd <> 0 then
+  begin
+    BmpInfo.biWidth := FWidth;
+    BmpInfo.biHeight := FHeight;
+    BmpInfo.biBitCount := FBitDepth;
+    BmpInfo.biCompression := FCompression;
+
+    Result := capSetVideoFormat(FHWnd, @BmpInfo, SizeOf(BmpInfo));
+  end;
+end;
+
 constructor TJvVideoFormat.Create;
 begin
   inherited Create;
@@ -809,7 +830,7 @@ begin
       if FExtra <> nil then
         FreeMem(FExtra);
       GetMem(FExtra, ExtraSize);
-      CopyMemory(FExtra, (PChar(@Info)) + SizeOf(tWAVEFORMATEX), FExtraSize);
+      CopyMemory(FExtra, PAnsiChar(@Info) + SizeOf(tWAVEFORMATEX), FExtraSize);
     end;
   end;
 end;
@@ -854,7 +875,7 @@ begin
     wfex^.cbSize := FExtraSize;
 
       // copy Extra to the end of the structure
-    CopyMemory((PChar(@wfex)) + SizeOf(tWAVEFORMATEX), FExtra, FExtraSize);
+    CopyMemory(PAnsiChar(@wfex) + SizeOf(tWAVEFORMATEX), FExtra, FExtraSize);
   end;
 end;
 
@@ -1423,6 +1444,7 @@ var
   DeviceVersion: array [0..MAX_PATH] of Char;
 begin
   // no more than 10 drivers in the system (cf Win32 API)
+  Drivers.Clear;
   for I := 0 to 9 do
     if capGetDriverDescription(I, DeviceName, SizeOf(DeviceName), DeviceVersion, SizeOf(DeviceVersion)) then
       Drivers.Add(DeviceName);
@@ -1456,7 +1478,6 @@ begin
       FCaptureSettings.Update;
       FAudioFormat.Update;
       UpdateCaptureStatus;
-
     end
     else
       // if not, trigger an exception

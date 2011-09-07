@@ -33,6 +33,7 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
+  Windows, // inline
   SysUtils, Classes, Controls, Forms, StdCtrls,
   JvTypes, JvComponent;
 
@@ -82,7 +83,7 @@ const
 implementation
 
 uses
-  Dialogs, JvHTMLParser, JvResources;
+  Dialogs, JvHtmlParser, JvResources;
 
 {$R *.dfm}
 

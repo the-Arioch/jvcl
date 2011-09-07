@@ -148,6 +148,9 @@ type
     constructor Create(AEditControl: TJvIPAddress);
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvIPAddress = class(TJvCustomControl)
   private
     FEditControls: array [0..3] of TJvIPEditControlHelper;
@@ -186,7 +189,7 @@ type
     procedure EnabledChanged; override;
     procedure ColorChanged; override;
     procedure FontChanged; override;
-    function DoEraseBackground(Canvas: TCanvas; Param: Integer): Boolean; override;
+    function DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean; override;
     procedure AdjustHeight;
     function GetControlExtents: TRect; override;
     procedure CreateParams(var Params: TCreateParams); override;
@@ -287,6 +290,9 @@ type
     destructor Destroy; override;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvTabDefaultPainter = class(TJvTabControlPainter)
   private
     FActiveFont: TFont;
@@ -348,6 +354,9 @@ type
     property ShowFocus: Boolean read FShowFocus write SetShowFocus default False;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvTabControl = class(TJvExTabControl)
   private
     FTabPainter: TJvTabControlPainter;
@@ -370,6 +379,9 @@ type
     property Color;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvPageControl = class(TJvExPageControl)
   private
     FClientBorderWidth: TBorderWidth;
@@ -387,8 +399,7 @@ type
     procedure SetTabPainter(const Value: TJvTabControlPainter);
   protected
     function HintShow(var HintInfo: {$IFDEF RTL200_UP}Controls.{$ENDIF RTL200_UP}THintInfo): Boolean; override;
-    function WantKey(Key: Integer; Shift: TShiftState;
-      const KeyText: WideString): Boolean; override;
+    function WantKey(Key: Integer; Shift: TShiftState): Boolean; override;
 
     procedure Loaded; override;
     function CanChange: Boolean; override;
@@ -418,6 +429,9 @@ type
   TJvTrackToolTipSide = (tsLeft, tsTop, tsRight, tsBottom);
   TJvTrackToolTipEvent = procedure(Sender: TObject; var ToolTipText: string) of object;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvTrackBar = class(TJvExTrackBar)
   private
     FOnChanged: TNotifyEvent;
@@ -499,6 +513,9 @@ type
     Node: TTreeNode; var Matches: Boolean) of object;
   TJvTreeViewNodeCheckedChange = procedure(Sender: TObject; Node: TJvTreeNode) of object;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvTreeView = class(TJvExTreeView)
   private
     FAutoDragScroll: Boolean;
@@ -518,6 +535,7 @@ type
     FReinitializeTreeNode: Boolean;
     FOnNodeCheckedChange: TJvTreeViewNodeCheckedChange;
     FCheckEventsDisabled: Boolean;
+    FRecreateCheckedState: array of Boolean;
 
     procedure InternalCustomDrawItem(Sender: TCustomTreeView;
       Node: TTreeNode; State: TCustomDrawState; var DefaultDraw: Boolean);
@@ -571,6 +589,10 @@ type
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure KeyPress(var Key: Char); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X: Integer; Y: Integer); override;
+    {$IFNDEF COMPILER15_UP} // Delphi XE fixed the OnAddition/OnDeletion bug
+    procedure Added(Node: TTreeNode); override;
+    procedure Delete(Node: TTreeNode); override;
+    {$ENDIF ~COMPILER15_UP}
     property ScrollDirection: Integer read FScrollDirection write SetScrollDirection;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure DblClick; override;
@@ -796,7 +818,7 @@ begin
       else
       begin
         {$IFDEF JVCLThemesEnabled}
-        if not FIPAddress.Enabled and ThemeServices.ThemesEnabled then
+        if not FIPAddress.Enabled and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
         begin
           EnableWindow(Handle, True);
           Exit;
@@ -1028,7 +1050,7 @@ begin
     inherited;
 end;
 
-function TJvIPAddress.DoEraseBackground(Canvas: TCanvas; Param: Integer): Boolean;
+function TJvIPAddress.DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean;
 begin
   Canvas.Brush.Color := Color;
   Canvas.FillRect(ClientRect);
@@ -1281,7 +1303,6 @@ begin
     SetBkColor(DC, ColorToRGB(Brush.Color));
     SetTextColor(Msg.ChildDC, ColorToRGB(Font.Color));
     SetBkColor(Msg.ChildDC, ColorToRGB(Brush.Color));
-    SetBkMode(Msg.ChildDC, TRANSPARENT);
   finally
     ReleaseDC(Handle, DC);
   end;
@@ -1904,8 +1925,7 @@ begin
     Result := False;
 end;
 
-function TJvPageControl.WantKey(Key: Integer; Shift: TShiftState;
-  const KeyText: WideString): Boolean;
+function TJvPageControl.WantKey(Key: Integer; Shift: TShiftState): Boolean;
 var
   ThisTab, Tab: TTabSheet;
   Forwrd: Boolean;
@@ -1931,7 +1951,7 @@ begin
       Exit;
     end;
   end;
-  Result := inherited WantKey(Key, Shift, KeyText);
+  Result := inherited WantKey(Key, Shift);
 end;
 
 procedure TJvPageControl.DrawTab(TabIndex: Integer; const Rect: TRect; Active: Boolean);
@@ -2395,7 +2415,7 @@ procedure TJvTreeNode.SetChecked(Value: Boolean);
 var
   Item: TTVItem;
 begin
-  if Value <> FChecked then
+  if Value <> GetChecked then
   begin
     FChecked := Value;
     FillChar(Item, SizeOf(Item), 0);
@@ -2493,6 +2513,8 @@ begin
 end;
 
 procedure TJvTreeView.CreateWnd;
+var
+  I: Integer;
 begin
   FReinitializeTreeNode := True;
   inherited CreateWnd;
@@ -2501,7 +2523,20 @@ begin
   // scroll bar that has nothing to do here. Setting the GWL_STYLE window
   // long shows the checkboxes and does not trigger this bug.
   if FCheckBoxes then
+  begin
     SetWindowLong(Handle, GWL_STYLE, GetWindowLong(Handle, GWL_STYLE) or TVS_CHECKBOXES);
+    // After a recreate we must set our saved checked state
+    if FRecreateCheckedState <> nil then
+    begin
+      for I := 0 to Min(Length(FRecreateCheckedState), Items.Count) - 1 do
+        TJvTreeNode(Items[I]).FChecked := FRecreateCheckedState[I];
+      FRecreateCheckedState := nil;
+    end;
+    // Mantis #4715. We must set the StateImages image list after changing TVS_CHECKBOXES
+    // because changing TVS_CHECKBOXES disables the TVSIL_STATE imagelist.
+    if (StateImages <> nil) and StateImages.HandleAllocated then
+      TreeView_SetImageList(Handle, StateImages.Handle, TVSIL_STATE);
+  end;
 end;
 
 procedure TJvTreeView.DestroyWnd;
@@ -2509,8 +2544,15 @@ var
   I: Integer;
 begin
   // update the FChecked field with the current data
-  for I := 0 to Items.Count - 1 do
-    TJvTreeNode(Items[I]).FChecked := TJvTreeNode(Items[I]).Checked;
+  if not (csDestroying in ComponentState) then
+  begin
+    SetLength(FRecreateCheckedState, Items.Count);
+    for I := 0 to Items.Count - 1 do
+    begin
+      TJvTreeNode(Items[I]).FChecked := TJvTreeNode(Items[I]).Checked;
+      FRecreateCheckedState[I] := TJvTreeNode(Items[I]).FChecked;
+    end;
+  end;
   inherited DestroyWnd;
 end;
 
@@ -2607,8 +2649,13 @@ procedure TJvTreeView.InternalCustomDrawItem(Sender: TCustomTreeView;
 begin
   if (State = []) or (State = [cdsDefault]) or (State = [cdsSelected]) then
   begin
-    Canvas.Font := TJvTreeNode(Node).Font;
-    Canvas.Brush := TJvTreeNode(Node).Brush;
+    // Mantis #5450: If HideSelection is false the node is painted as it wouldn't be
+    // selected because State = [].
+    if not (not HideSelection and Node.Selected and not Focused) then
+    begin
+      Canvas.Font := TJvTreeNode(Node).Font;
+      Canvas.Brush := TJvTreeNode(Node).Brush;
+    end;
   end;
   if Assigned(FOnCustomDrawItem) then
     FOnCustomDrawItem(Self, Node, State, DefaultDraw);
@@ -2851,7 +2898,7 @@ var
 begin
   Node := Items.GetNode(HTREEITEM(Msg.LParam));
   if Node <> nil then
-    if Ord(TJvTreeNode(Node).Checked) <> Msg.WParam then // do not trigger if nothing was changed
+    if WPARAM(Ord(TJvTreeNode(Node).Checked)) <> Msg.WParam then // do not trigger if nothing was changed
       TJvTreeNode(Node).DoCheckedChange;
 end;
 
@@ -2949,6 +2996,50 @@ begin
   else
     Result := clDefault;
 end;
+
+{$IFNDEF COMPILER15_UP} // Delphi XE fixed the OnAddition/OnDeletion bug
+procedure TJvTreeView.Added(Node: TTreeNode);
+var
+  OrgOnAddition: TTVExpandedEvent;
+begin
+  OrgOnAddition := OnAddition;
+  if CreateWndRestores and
+    {$IFDEF COMPILER170_UP}
+    (csRecreating in ControlState)
+    {$ELSE}
+    not (csDestroying in ComponentState)
+    {$ENDIF}
+  then
+    OnAddition := nil;
+  try
+    inherited Added(Node);
+  finally
+    if Assigned(OrgOnAddition) then
+      OnAddition := OrgOnAddition;
+  end;
+end;
+
+procedure TJvTreeView.Delete(Node: TTreeNode);
+var
+  OrgOnDeletion: TTVExpandedEvent;
+begin
+  OrgOnDeletion := OnDeletion;
+  if CreateWndRestores and
+    {$IFDEF COMPILER10_UP}
+    (csRecreating in ControlState)
+    {$ELSE}
+    not (csDestroying in ComponentState)
+    {$ENDIF}
+  then
+    OnDeletion := nil;
+  try
+    inherited Delete(Node);
+  finally
+    if Assigned(OrgOnDeletion) then
+      OnDeletion := OrgOnDeletion;
+  end;
+end;
+{$ENDIF ~COMPILER15_UP}
 
 procedure TJvTreeView.Select(Node: TTreeNode; ShiftState: TShiftState);
 var

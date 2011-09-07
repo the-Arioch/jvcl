@@ -79,6 +79,9 @@ type
   // grabbed and then start grabbing. All the grab operations will be done
   // in parallel in the background, leaving the user's application free
   // to continue its operations
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvUrlListGrabber = class(TJvComponent)
   private
     FOnDoneFile: TJvGrabberDoneFileEvent;
@@ -486,7 +489,7 @@ type
   // this is the ancestor of all the grabber threads, and there
   // should be as many descendants as there are TJvCustomUrlGrabber
   // descendants.
-  TJvCustomUrlGrabberThread = class(TThread)
+  TJvCustomUrlGrabberThread = class(TJvCustomThread)
   private
     FErrorText: string; // the error string received from the server
     FStatus: DWORD;
@@ -1202,6 +1205,7 @@ begin
   inherited Create(True);
   FContinue := True;
   FGrabber := Grabber;
+  ThreadName := Format('%s: %s',[ClassName, Grabber.Name]);
 end;
 
 procedure TJvCustomUrlGrabberThread.DoProgress;
@@ -1227,6 +1231,7 @@ end;
 
 procedure TJvCustomUrlGrabberThread.Execute;
 begin
+  NameThread(ThreadName);
   SetGrabberStatus(gsStopped);
   FGrabber.Stream := nil;
   try

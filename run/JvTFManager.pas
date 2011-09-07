@@ -438,6 +438,9 @@ type
   TJvTFApptDescEvent = procedure(Sender: TObject; Appt: TJvTFAppt;
     var Description: string) of object;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvTFScheduleManager = class(TComponent)
   private
     FAlwaysPost: Boolean;
@@ -958,6 +961,9 @@ type
     property Title: string read FTitle write SetTitle;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvTFUniversalPrinter = class(TJvTFPrinter)
   public
     procedure NewDoc; override;
@@ -1046,7 +1052,7 @@ implementation
 
 uses
   JvConsts, JvResources,
-  Dialogs, Forms, JvJVCLUtils;
+  Dialogs, Forms, JvJVCLUtils, JclSysUtils;
 
 function AdjustEndTime(ATime: TTime): TTime;
 begin
@@ -1069,18 +1075,9 @@ begin
 end;
 
 function MoveRect(ARect: TRect; NewLeft, NewTop: Integer): TRect;
-var
-  XOffset, YOffset: Integer;
 begin
-  XOffset := NewLeft - ARect.Left;
-  YOffset := NewTop - ARect.Top;
-  with Result do
-  begin
-    Left := ARect.Left + XOffset;
-    Right := ARect.Right + XOffset;
-    Top := ARect.Top + YOffset;
-    Bottom := ARect.Bottom + YOffset;
-  end;
+  Result := ARect;
+  OffsetRect(Result, NewLeft - ARect.Left, NewTop - ARect.Top);
 end;
 
 function StripCRLF(const S: string): string;
@@ -5179,9 +5176,9 @@ function TJvTFDWNames.GetDWName(DWIndex: Integer): string;
 begin
   case Source of
     dwnsSysLong:
-      Result := SysUtils.{$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}LongDayNames[DWIndex];
+      Result := JclFormatSettings.LongDayNames[DWIndex];
     dwnsSysShort:
-      Result := SysUtils.{$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDayNames[DWIndex];
+      Result := JclFormatSettings.ShortDayNames[DWIndex];
   else // dwnsCustom
     Result := GetDWN(DWIndex);
   end;

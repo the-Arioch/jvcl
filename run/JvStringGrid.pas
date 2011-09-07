@@ -46,12 +46,20 @@ const
   GM_ACTIVATECELL = WM_USER + 123;
 
 type
-  // (rom) renamed elements made packed
-  TGMActivateCell = packed record
+  TGMActivateCell = record
     Msg: Cardinal;
+    {$IFDEF COMPILER16_UP}
+	MsgFiller: TDWordFiller;
+    {$ENDIF COMPILER16_UP}
     Column: Integer;
+    {$IFDEF COMPILER16_UP}
+	WParamFiller: TDWordFiller;
+    {$ENDIF COMPILER16_UP}
     Row: Integer;
-    Result: Integer;
+    {$IFDEF COMPILER16_UP}
+	LParamFiller: TDWordFiller;
+    {$ENDIF COMPILER16_UP}
+    Result: LRESULT;
   end;
 
   TJvStringGrid = class;
@@ -67,11 +75,14 @@ type
 
   TJvOnGetEditStyleEvent = procedure(Sender: TJvStringGrid; AColumn, ARow: Integer; PickListStrings: TStrings; var EditStyle: TEditStyle) of object;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvStringGrid = class(TJvExStringGrid)
   private
     FAlignment: TAlignment;
-    FSetCanvasProperties: TDrawCellEvent;
-    FGetCellAlignment: TGetCellAlignmentEvent;
+    FOnSetCanvasProperties: TDrawCellEvent;
+    FOnGetCellAlignment: TGetCellAlignmentEvent;
     FOnColWidthsChanged: TNotifyEvent;
     FCaptionClick: TCaptionClickEvent;
     FCellOnMouseDown: TGridCoord;
@@ -95,24 +106,19 @@ type
     procedure SetFixedFont(const Value: TFont);
     procedure DoFixedFontChange(Sender: TObject);
 
-    procedure EditButtonClick(Sender: TObject); dynamic; // NEW-WP
+    procedure EditButtonClick(Sender: TObject); dynamic;
     procedure ListBoxCloseUp(Sender: TObject); dynamic;
   protected
     function CreateEditor: TInplaceEdit; override;
     function CanEditShow: Boolean; override;
     procedure ColWidthsChanged; override;
-    procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
-      X, Y: Integer); override;
-    procedure MouseUp(Button: TMouseButton; Shift: TShiftState;
-      X, Y: Integer); override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure ExitCell(const EditText: string; AColumn, ARow: Integer); virtual;
-    procedure SetCanvasProperties(AColumn, ARow: Longint;
-      Rect: TRect; State: TGridDrawState); virtual;
-    procedure DrawCell(AColumn, ARow: Longint;
-      Rect: TRect; State: TGridDrawState); override;
+    procedure SetCanvasProperties(AColumn, ARow: Longint; Rect: TRect; State: TGridDrawState); virtual;
+    procedure DrawCell(AColumn, ARow: Longint; Rect: TRect; State: TGridDrawState); override;
 
-    // NEW: Override to provide dropdown list editing as an
-    // event-handler in TJvStringGrid.
+    // NEW: Override to provide dropdown list editing as an event-handler in TJvStringGrid.
     function GetEditStyle(ACol, ARow: Longint): TEditStyle; override;
 
     procedure CaptionClick(AColumn, ARow: Longint); dynamic;
@@ -142,7 +148,7 @@ type
     // based on the text in the affected Cells.
     // MinWidth is the minimum width of the column(s). If MinWidth is < 0,
     // DefaultColWidth is used instead
-    procedure AutoSizeCol(Index, MinWidth: Integer);
+    procedure AutoSizeCol(Index, MinWidth: Integer; AColumnPadding: Integer = 8);
 
     // Inserts a new row at the specified Index and moves all existing rows >= Index down one step
     // Returns the inserted row as an empty TStrings
@@ -220,8 +226,8 @@ type
     property FixedFont: TFont read FFixedFont write SetFixedFont;
     property OnExitCell: TExitCellEvent read FOnExitCell write FOnExitCell;
 
-    property OnSetCanvasProperties: TDrawCellEvent read FSetCanvasProperties write FSetCanvasProperties;
-    property OnGetCellAlignment: TGetCellAlignmentEvent read FGetCellAlignment write FGetCellAlignment;
+    property OnSetCanvasProperties: TDrawCellEvent read FOnSetCanvasProperties write FOnSetCanvasProperties;
+    property OnGetCellAlignment: TGetCellAlignmentEvent read FOnGetCellAlignment write FOnGetCellAlignment;
     property OnCaptionClick: TCaptionClickEvent read FCaptionClick write FCaptionClick;
     property OnColWidthsChanged: TNotifyEvent read FOnColWidthsChanged write FOnColWidthsChanged;
     property OnMouseEnter;
@@ -233,8 +239,8 @@ type
     property OnHorizontalScroll: TNotifyEvent read FOnHorizontalScroll write FOnHorizontalScroll;
     property OnShowEditor: TEditShowEvent read FOnShowEditor write FOnShowEditor;
 
-    property OnGetEditStyle: TJvOnGetEditStyleEvent read FOnGetEditStyle write FOnGetEditStyle; // NEW -WP (D6 UP)
-    property OnEditButtonClick: TNotifyEvent read FOnEditButtonClick write FOnEditButtonClick; // NEW-WP  - User clicks on Ellipsis button, get event fired!
+    property OnGetEditStyle: TJvOnGetEditStyleEvent read FOnGetEditStyle write FOnGetEditStyle;
+    property OnEditButtonClick: TNotifyEvent read FOnEditButtonClick write FOnEditButtonClick; // User clicks on Ellipsis button, get event fired!
     property OnListBoxCloseUp: TNotifyEvent read FOnListBoxCloseUp write FOnListBoxCloseUp; // Listbox close up.
   end;
 
@@ -347,13 +353,13 @@ begin
   FFixedFont.Assign(Font);
   FFixedFont.OnChange := DoFixedFontChange;
   // ControlStyle := ControlStyle + [csAcceptsControls];
-  FPickListStrings := TStringList.Create; //NEW -WP
+  FPickListStrings := TStringList.Create;
 end;
 
 destructor TJvStringGrid.Destroy;
 begin
   FreeAndNil(FFixedFont);
-  FreeAndNil(FPickListStrings); //NEW-WP
+  FreeAndNil(FPickListStrings);
   inherited Destroy;
 end;
 
@@ -948,8 +954,8 @@ function TJvStringGrid.GetCellAlignment(AColumn, ARow: Integer;
   State: TGridDrawState): TAlignment;
 begin
   Result := FAlignment;
-  if Assigned(FGetCellAlignment) then
-    FGetCellAlignment(Self, AColumn, ARow, State, Result);
+  if Assigned(FOnGetCellAlignment) then
+    FOnGetCellAlignment(Self, AColumn, ARow, State, Result);
 end;
 
 procedure TJvStringGrid.GMActivateCell(var Msg: TGMActivateCell);
@@ -1014,8 +1020,8 @@ end;
 procedure TJvStringGrid.SetCanvasProperties(AColumn, ARow: Integer;
   Rect: TRect; State: TGridDrawState);
 begin
-  if Assigned(FSetCanvasProperties) then
-    FSetCanvasProperties(Self, AColumn, ARow, Rect, State);
+  if Assigned(FOnSetCanvasProperties) then
+    FOnSetCanvasProperties(Self, AColumn, ARow, Rect, State);
 end;
 
 procedure TJvStringGrid.WMCommand(var Msg: TWMCommand);
@@ -1030,7 +1036,7 @@ end;
 function TJvStringGrid.InsertCol(Index: Integer): TStrings;
 var
   I: Integer;
-  AStr: TStrings;
+  LStr: TStrings;
 begin
   ColCount := ColCount + 1;
   if Index < 0 then
@@ -1042,8 +1048,8 @@ begin
     Exit;
   for I := ColCount - 2 downto Index do
   begin
-    AStr := Cols[I];
-    Cols[I + 1] := AStr;
+    LStr := Cols[I];
+    Cols[I + 1] := LStr;
   end;
   Result := Cols[Index];
   Result.Clear;
@@ -1052,7 +1058,7 @@ end;
 function TJvStringGrid.InsertRow(Index: Integer): TStrings;
 var
   I: Integer;
-  AStr: TStrings;
+  LStr: TStrings;
 begin
   RowCount := RowCount + 1;
   if Index < 0 then
@@ -1064,8 +1070,8 @@ begin
     Exit;
   for I := RowCount - 2 downto Index do
   begin
-    AStr := Rows[I];
-    Rows[I + 1] := AStr;
+    LStr := Rows[I];
+    Rows[I + 1] := LStr;
   end;
   Result.Clear;
 end;
@@ -1073,7 +1079,7 @@ end;
 procedure TJvStringGrid.RemoveCol(Index: Integer);
 var
   I: Integer;
-  AStr: TStrings;
+  LStr: TStrings;
 begin
   if Index < 0 then
     Index := 0;
@@ -1081,8 +1087,8 @@ begin
     Index := ColCount - 1;
   for I := Index + 1 to ColCount - 1 do
   begin
-    AStr := Cols[I];
-    Cols[I - 1] := AStr;
+    LStr := Cols[I];
+    Cols[I - 1] := LStr;
   end;
   if ColCount > 1 then
     ColCount := ColCount - 1;
@@ -1091,7 +1097,7 @@ end;
 procedure TJvStringGrid.RemoveRow(Index: Integer);
 var
   I: Integer;
-  AStr: TStrings;
+  LStr: TStrings;
 begin
   if Index < 0 then
     Index := 0;
@@ -1099,8 +1105,8 @@ begin
     Index := RowCount - 1;
   for I := Index + 1 to RowCount - 1 do
   begin
-    AStr := Rows[I];
-    Rows[I - 1] := AStr;
+    LStr := Rows[I];
+    Rows[I - 1] := LStr;
   end;
   if RowCount > 1 then
     RowCount := RowCount - 1;
@@ -1136,7 +1142,6 @@ begin
   if AHeight <= 0 then
     AHeight := DefaultRowHeight;
   RowHeights[Index] := AHeight;
-
 end;
 
 procedure TJvStringGrid.SetFixedFont(const Value: TFont);
@@ -1149,20 +1154,36 @@ begin
   Invalidate;
 end;
 
-// NEW-WP - invoked dynamically from the TInplaceEditList
 procedure TJvStringGrid.ListBoxCloseUp(Sender: TObject);
 begin
+  // invoked dynamically from the TInplaceEditList
   if Assigned(FOnListBoxCloseUp) then
     FOnListBoxCloseUp(Self)
 end;
 
-procedure TJvStringGrid.EditButtonClick(Sender: TObject); //dynamic;
+procedure TJvStringGrid.EditButtonClick(Sender: TObject);
 begin
   if Assigned(FOnEditButtonClick) then
     FOnEditButtonClick(Self)
 end;
 
-procedure TJvStringGrid.AutoSizeCol(Index, MinWidth: Integer);
+procedure TJvStringGrid.AutoSizeCol(Index, MinWidth: Integer; AColumnPadding: Integer);
+
+  // We must use the cell's font for the GetTextExtentPoint32() call.
+  procedure SetCanvasPropertiesForCell(AColumn, ARow: Integer);
+  begin
+    if (AColumn < FixedCols) or (ARow < FixedRows) then
+    begin
+      Canvas.Font := FixedFont;
+      SetCanvasProperties(AColumn, ARow, CellRect(AColumn, ARow), [gdFixed]);
+    end
+    else
+    begin
+      Canvas.Font := Font;
+      SetCanvasProperties(AColumn, ARow, CellRect(AColumn, ARow), []);
+    end;
+  end;
+
 var
   I, J, AColWidth: Integer;
   ASize: TSize;
@@ -1175,8 +1196,9 @@ begin
       AColWidth := MinWidth;
     for J := 0 to RowCount - 1 do
     begin
+      SetCanvasPropertiesForCell(Index, J);
       if GetTextExtentPoint32(Canvas.Handle, PChar(Cells[Index, J]), Length(Cells[Index, J]), ASize) then
-        AColWidth := Max(AColWidth, ASize.cx + 8);
+        AColWidth := Max(AColWidth, ASize.cx + AColumnPadding);
     end;
     ColWidths[Index] := AColWidth;
   end
@@ -1190,8 +1212,9 @@ begin
         AColWidth := MinWidth;
       for J := 0 to RowCount - 1 do
       begin
+        SetCanvasPropertiesForCell(Index, J);
         if GetTextExtentPoint32(Canvas.Handle, PChar(Cells[I, J]), Length(Cells[I, J]), ASize) then
-          AColWidth := Max(AColWidth, ASize.cx + 8);
+          AColWidth := Max(AColWidth, ASize.cx + AColumnPadding);
       end;
       ColWidths[I] := AColWidth;
     end;

@@ -35,7 +35,7 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Messages, Classes, Graphics, Controls, Forms, ExtCtrls,
   JvDockControlForm, JvDockSupportControl, JvDockTree, JvDockVIDStyle,
-  JvDockGlobals, ContNrs;
+  JvDockGlobals, Contnrs;
 
 type
   TJvDockVSNETConjoinServerOption = class(TJvDockVIDConjoinServerOption)
@@ -269,6 +269,9 @@ type
 
   TJvDockVSChannelClass = class of TJvDockVSChannel;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDockVSNetStyle = class(TJvDockVIDStyle)
   private
     FTimer: TTimer;
@@ -2534,7 +2537,7 @@ procedure TJvDockVSNetStyle.Timer(Sender: TObject);
     end;
   end;
 
-  function PointIsOnPopup(P: TPoint; GlobalCheck: Boolean): Boolean;
+  function PointIsOnPopup(P: TPoint; GlobalCheck: Boolean; Recurse: Boolean): Boolean;
   const
     GW_ENABLEDPOPUP = 6;
   var
@@ -2561,17 +2564,17 @@ procedure TJvDockVSNetStyle.Timer(Sender: TObject);
         end;
       end;
 
-      if ActivePopupWindow then
+      if Recurse and ActivePopupWindow then
       begin
         GetWindowRect(Handle, Rect);
         // Search for a control one pixel to the left;
         Dec(Rect.Left);
-        Result := PointIsOnPopup(Rect.TopLeft, False);
+        Result := PointIsOnPopup(Rect.TopLeft, False, False);
         if not Result then
         begin
           // Search for a control one pixel to the Right;
           Inc(Rect.Right);
-          Result := PointIsOnPopup(Point(Rect.Right, Rect.Top), False);
+          Result := PointIsOnPopup(Point(Rect.Right, Rect.Top), False, False);
         end;
       end;
     end;
@@ -2587,7 +2590,7 @@ begin
     Exit;
 
   GetCursorPos(P);
-  if PointIsOnPopup(P, True) then
+  if PointIsOnPopup(P, True, True) then
   begin
     { Reset timer }
     FCurrentTimer := ChannelOption.HideHoldTime;
@@ -3369,16 +3372,16 @@ end;
 
 procedure TJvDockVSPopupPanelSplitter.DrawLine;
 var
-  P: TPoint;
+  X, Y: Integer;
 begin
   FLineVisible := not FLineVisible;
-  P := Point(Left, Top);
+  X := Left;
+  Y := Top;
   if VSChannelAlign in [alLeft, alRight] then
-    P.X := Left + FSplit
+    X := Left + FSplit
   else
-    P.Y := Top + FSplit;
-  with P do
-    PatBlt(FLineDC, X, Y, Width, Height, PATINVERT);
+    Y := Top + FSplit;
+  PatBlt(FLineDC, X, Y, Width, Height, PATINVERT);
 end;
 
 function TJvDockVSPopupPanelSplitter.FindControl: TControl;

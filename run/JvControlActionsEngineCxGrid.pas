@@ -37,7 +37,7 @@ uses
 {$IFDEF USE_3RDPARTY_DEVEXPRESS_CXGRID}
   cxGridCustomTableView, cxDBData, cxGridCustomView, cxGrid, cxGridChartView,
 {$ENDIF USE_3RDPARTY_DEVEXPRESS_CXGRID}
-  JvControlActionsEngine;
+  JvControlActionsEngine, JvActionsEngine;
 
 {$IFDEF USE_3RDPARTY_DEVEXPRESS_CXGRID}
 type
@@ -46,15 +46,14 @@ type
     procedure ExportChartViewToImage(aExtension, aFileName: string; aChartView: TcxGridChartView);
   protected
     procedure ExportGrid(aGrid: TcxGrid);
-    function GetGridTableView(AActionComponent: TComponent):
-      TcxCustomGridTableView;
+    function GetGridTableView(AActionComponent: TComponent): TcxCustomGridTableView;
     function GetGridView(AActionComponent: TComponent): TcxCustomGridView;
     function GetGrid(AActionComponent: TComponent): TcxGrid;
     function GetSupportedOperations: TJvControlActionOperations; override;
   public
-    function ExecuteOperation(const aOperation: TJvControlActionOperation; const
-      aActionControl: TControl): Boolean; override;
+    function ExecuteOperation(const aOperation: TJvControlActionOperation; const aActionControl: TControl): Boolean; override;
     function SupportsComponent(aActionComponent: TComponent): Boolean; override;
+    function UpdateAction(Action: TBasicAction): boolean; override;
   end;
 
 {$ENDIF USE_3RDPARTY_DEVEXPRESS_CXGRID}
@@ -74,37 +73,46 @@ implementation
 
 uses
 {$IFDEF USE_3RDPARTY_DEVEXPRESS_CXGRID}
-  cxGridDBDataDefinitions,
+  cxGridDBDataDefinitions, cxControls,
   cxCustomData, cxGridExportLink,
   {$IFDEF DELPHI12_UP}
-  PngImage, Jpeg,
+  pngimage, jpeg,
   {$ENDIf}
 {$ENDIF USE_3RDPARTY_DEVEXPRESS_CXGRID}
-  Graphics, Variants, SysUtils, Dialogs;
+  Graphics, Variants, SysUtils, Dialogs, JvControlActions;
 
 //=== { TJvDatabaseActionDevExpCxGridControlEngine } =========================
 
 {$IFDEF USE_3RDPARTY_DEVEXPRESS_CXGRID}
 
-function TJvControlActioncxGridEngine.ExecuteOperation(const aOperation:
-  TJvControlActionOperation; const aActionControl: TControl): Boolean;
+function TJvControlActioncxGridEngine.ExecuteOperation(const aOperation: TJvControlActionOperation; const
+    aActionControl: TControl): Boolean;
 begin
   Result := true;
   case aOperation of
-    caoCollapse: if Assigned(GetGridTableView(aActionControl)) then
+    caoCollapse:
+      if Assigned(GetGridTableView(aActionControl)) then
         GetGridTableView(aActionControl).Datacontroller.Groups.FullCollapse
       else
         Result := false;
-    caoExpand: if Assigned(GetGridTableView(aActionControl)) then
+    caoExpand:
+      if Assigned(GetGridTableView(aActionControl)) then
         GetGridTableView(aActionControl).Datacontroller.Groups.FullExpand
       else
         Result := false;
-    caoOptimizeColumns: if Assigned(GetGridTableView(aActionControl)) then
+    caoOptimizeColumns:
+      if Assigned(GetGridTableView(aActionControl)) then
         GetGridTableView(aActionControl).ApplyBestFit
       else
         Result := false;
-    caoExport: if Assigned(GetGridView(aActionControl)) then
+    caoExport:
+      if Assigned(GetGridView(aActionControl)) then
         ExportGrid(GetGrid(aActionControl))
+      else
+        Result := false;
+    caoCustomizeColumns:
+      if Assigned(GetGridView(aActionControl)) then
+        GetGridView(aActionControl).Controller.Customization := not GetGridView(aActionControl).Controller.Customization
       else
         Result := false;
   else
@@ -157,7 +165,7 @@ begin
     SaveDialog.Name := 'SaveDialog';
     SaveDialog.DefaultExt := 'XLS';
     SaveDialog.Filter :=
-      'MS-Excel-Files (*.XLS)|*.XLS|XML-Files (*.XML)|*.XML|HTML-Files (*.HTM;*.HTML)|*.HTM;*.HTML|Text-Files (*.TXT)|*.TXT';
+      'MS-Excel-Files (*.XLS;*.XLSX)|*.XLS;*.XLSX|XML-Files (*.XML)|*.XML|HTML-Files (*.HTM;*.HTML)|*.HTM;*.HTML|Text-Files (*.TXT)|*.TXT';
     if GetGridView(aGrid) is TcxGridChartView then
       {$IFDEF DELPHI12_UP}
       SaveDialog.Filter := SaveDialog.Filter+'|Image-Files (*.PNG;*.JPG;*.BMP)|*.PNG;*.JPG;*.BMP|Metafile-Graphics (*.WMF;*.EMF)|*.WMF;*.EMF';
@@ -173,6 +181,8 @@ begin
         Extension := Uppercase(ExtractFileExt(FileName));
         if Extension = '.XLS' then
           ExportGridToExcel(Filename, aGrid)
+        else if Extension = '.XLSX' then
+          ExportGridToXLSX(Filename, aGrid)
         else if ((Extension = '.BMP') or (Extension = '.JPG') or (Extension = '.PNG') or
                  (Extension = '.WMF') or (Extension = '.EMF'))
             and (GetGridView(aGrid) is TcxGridChartView) then
@@ -189,8 +199,7 @@ begin
   end;
 end;
 
-function TJvControlActioncxGridEngine.GetGridTableView(AActionComponent:
-  TComponent): TcxCustomGridTableView;
+function TJvControlActioncxGridEngine.GetGridTableView(AActionComponent: TComponent): TcxCustomGridTableView;
 var GridView : TcxCustomGridView;
 begin
   GridView := GetGridView(AActionComponent);
@@ -200,8 +209,7 @@ begin
     Result := nil;
 end;
 
-function TJvControlActioncxGridEngine.GetGridView(AActionComponent:
-  TComponent): TcxCustomGridView;
+function TJvControlActioncxGridEngine.GetGridView(AActionComponent: TComponent): TcxCustomGridView;
 begin
   if Assigned(AActionComponent) then
     if AActionComponent is TcxGridSite then
@@ -215,8 +223,7 @@ begin
     Result := nil;
 end;
 
-function TJvControlActioncxGridEngine.GetGrid(AActionComponent: TComponent):
-  TcxGrid;
+function TJvControlActioncxGridEngine.GetGrid(AActionComponent: TComponent): TcxGrid;
 begin
   if Assigned(AActionComponent) then
     if AActionComponent is TcxGridSite then
@@ -233,13 +240,20 @@ end;
 function TJvControlActioncxGridEngine.GetSupportedOperations:
   TJvControlActionOperations;
 begin
-  Result := [caoCollapse, caoExpand, caoOptimizeColumns, caoExport];
+  Result := [caoCollapse, caoExpand, caoOptimizeColumns, caoExport, caoCustomizeColumns];
 end;
 
 function TJvControlActioncxGridEngine.SupportsComponent(aActionComponent:
   TComponent): Boolean;
 begin
   Result := Assigned(GetGridView(AActionComponent));
+end;
+
+function TJvControlActioncxGridEngine.UpdateAction(Action: TBasicAction): boolean;
+begin
+  if Assigned(Action) and (Action is TJvControlBaseAction) and
+    Assigned(GetGridView(TJvControlBaseAction(Action).ActionComponent)) and (TJvControlBaseAction(Action).ControlOperation = caoCustomizeColumns) then
+    TJvControlBaseAction(Action).SetChecked(GetGridView(TJvControlBaseAction(Action).ActionComponent).Controller.Customization);
 end;
 
 {$ENDIF USE_3RDPARTY_DEVEXPRESS_CXGRID}

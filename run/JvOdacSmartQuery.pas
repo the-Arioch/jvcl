@@ -35,12 +35,15 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
+  {$IFDEF USE_3RDPARTY_CORELAB_ODAC}
   SysUtils, Classes, StdCtrls, ExtCtrls, Forms, Controls,
   DB,
   OraSmart, Ora, DBaccess,
   JvThread, JvThreadDialog, JvDynControlEngine,
+  {$ENDIF USE_3RDPARTY_CORELAB_ODAC}
   JvBaseDBThreadedDataset;
 
+{$IFDEF USE_3RDPARTY_CORELAB_ODAC}
 type
   TJvOdacThreadedDatasetAllowedContinueRecordFetchOptions =
     class(TJvBaseThreadedDatasetAllowedContinueRecordFetchOptions)
@@ -82,6 +85,9 @@ type
     procedure SaveRefreshKeyFields;
   End;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvOdacSmartQuery = class(TSmartQuery, IJvThreadedDatasetInterface)
     procedure BreakExecution;
     procedure BringThreadDialogToFront;
@@ -153,6 +159,9 @@ type
         GetOnThreadException write SetOnThreadException;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvOdacOraQuery = class(TOraQuery, IJvThreadedDatasetInterface)
     procedure BreakExecution;
     procedure BringThreadDialogToFront;
@@ -228,6 +237,9 @@ type
   end;
 
 type
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvOdacOraTable = class(TOraTable, IJvThreadedDatasetInterface)
     procedure BreakExecution;
     procedure BringThreadDialogToFront;
@@ -298,6 +310,7 @@ type
     property OnThreadException: TJvThreadedDatasetThreadExceptionEvent read
         GetOnThreadException write SetOnThreadException;
   end;
+{$ENDIF USE_3RDPARTY_CORELAB_ODAC}
 
 {$IFDEF UNITVERSIONING}
 const
@@ -311,6 +324,7 @@ const
 
 implementation
 
+{$IFDEF USE_3RDPARTY_CORELAB_ODAC}
 uses Variants, MemData;
 
 //=== { TJvOdacSmartQuery } ==================================================
@@ -1360,6 +1374,7 @@ begin
   else
     Result := False;
 end;
+{$ENDIF USE_3RDPARTY_CORELAB_ODAC}
 
 
 {$IFDEF UNITVERSIONING}

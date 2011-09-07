@@ -850,6 +850,7 @@ type
     procedure ControlSetDefaultProperties;
     procedure ControlSetHint(const Value: string);
     //IJvDynControlProgressBar
+    procedure ControlSetMarquee(Value: Boolean);
     procedure ControlSetMax(Value: Integer);
     procedure ControlSetMin(Value: Integer);
     procedure ControlSetOnClick(Value: TNotifyEvent);
@@ -1075,7 +1076,7 @@ uses
   {$ENDIF}
   cxTextEdit, cxControls,
   JvDynControlEngineVCL,
-  JvJclUtils, JvBrowseFolder, JvDynControlEngineTools,
+  JvJCLUtils, JvBrowseFolder, JvDynControlEngineTools,
   cxLookAndFeelPainters, TypInfo;
 
 var
@@ -2133,7 +2134,7 @@ end;
 
 procedure TJvDynControlCxMemo.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlCxMemo.ControlGetValue: Variant;
@@ -3641,6 +3642,7 @@ end;
 procedure TJvDynControlCxProgressbar.ControlSetDefaultProperties;
 begin
   Properties.ShowText := False;
+  Properties.AnimationSpeed := 3;
 end;
 
 procedure TJvDynControlCxProgressbar.ControlSetCaption(const Value: string);
@@ -3691,7 +3693,7 @@ end;
 
 procedure TJvDynControlCxProgressbar.ControlSetOrientation(Value: TProgressBarOrientation);
 begin
-  if Value = pbHorizontal	then
+  if Value = pbHorizontal then
     Properties.Orientation:= cxorHorizontal
   else
     Properties.Orientation:= cxorVertical;
@@ -3719,6 +3721,11 @@ end;
 procedure TJvDynControlCxProgressbar.ControlSetCxProperties(Value: TCxDynControlWrapper);
 begin
   LookAndFeel.Assign(Value.LookAndFeel);
+end;
+
+procedure TJvDynControlCxProgressBar.ControlSetMarquee(Value: Boolean);
+begin
+  Properties.Marquee := Value;
 end;
 
 
@@ -4391,7 +4398,9 @@ begin
       st.Delimiter := Properties.Delimiter[1]
     else
       st.Delimiter := chr(0);
+    {$IFDEF DELPHI2009_UP}
     st.StrictDelimiter := True;
+    {$ENDIF DELPHI2009_UP}
     st.DelimitedText := Value;
 
     SetLength(ACheckStates, Properties.Items.Count);

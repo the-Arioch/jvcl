@@ -922,7 +922,10 @@ function AllocMemo(Size: Longint): Pointer;
 function ReallocMemo(fpBlock: Pointer; Size: Longint): Pointer;
 procedure FreeMemo(var fpBlock: Pointer);
 function GetMemoSize(fpBlock: Pointer): Longint;
+{$IFDEF CPU32}
+{$MESSAGE HINT 'Is this CompareMem function at all necessary?'}
 function CompareMem(fpBlock1, fpBlock2: Pointer; Size: Cardinal): Boolean;
+{$ENDIF CPU32}
 
 { Manipulate huge pointers routines }
 
@@ -1092,9 +1095,12 @@ uses
   {$IFDEF MSWINDOWS}
   ComObj, ShellAPI, MMSystem, Registry,
   {$ENDIF MSWINDOWS}
+  {$IFDEF UNICODE}
+  Character, // needed for JclStrings inlined functions
+  {$ENDIF UNICODE}
   Consts,
   JclStrings, JclSysInfo, JclFileUtils,
-  Math;
+  Math, JclSysUtils;
 
 const
   Separators: TSysCharSet = [#00, ' ', '-', #13, #10, '.', ',', '/', '\', '#', '"', '''',
@@ -1333,11 +1339,11 @@ end;
 
 procedure GetXYByPos(const S: string; const Pos: Integer; var X, Y: Integer);
 var
-  I, iB: Integer;
+  I, IB: Integer;
 begin
   X := -1;
   Y := -1;
-  iB := 0;
+  IB := 0;
   if (Length(S) >= Pos) and (Pos >= 0) then
   begin
     I := 1;
@@ -1347,21 +1353,21 @@ begin
       if S[I] = #10 then
       begin
         Inc(Y);
-        iB := I + 1;
+        IB := I + 1;
       end;
       Inc(I);
     end;
-    X := Pos - iB;
+    X := Pos - IB;
   end;
 end;
 
 procedure GetXYByPosW(const S: WideString; const Pos: Integer; var X, Y: Integer);
 var
-  I, iB: Integer;
+  I, IB: Integer;
 begin
   X := -1;
   Y := -1;
-  iB := 0;
+  IB := 0;
   if (Length(S) >= Pos) and (Pos >= 0) then
   begin
     I := 1;
@@ -1371,11 +1377,11 @@ begin
       if S[I] = #10 then
       begin
         Inc(Y);
-        iB := I + 1;
+        IB := I + 1;
       end;
       Inc(I);
     end;
-    X := Pos - iB;
+    X := Pos - IB;
   end;
 end;
 
@@ -1666,12 +1672,12 @@ begin
     if StartIndex > LenS then
       Exit;
   end;
-  I := PosIdx(Separator, S, StartIndex + 1);
+  I := PosIdx(Separator, S, StartIndex);
   if I = 0 then
     I := LenS + 1;
   Result := Copy(S, StartIndex, I - StartIndex);
-  if CompareText(Result, Separator) = 0 then
-    Result := '';
+  //if CompareText(Result, Separator) = 0 then
+  //  Result := '';
 end;
 
 function SubStrBySeparatorW(const S: WideString; const Index: Integer; const Separator: WideString; StartIndex: Integer): WideString;
@@ -1698,12 +1704,12 @@ begin
     if StartIndex > LenS then
       Exit;
   end;
-  I := PosIdx(Separator, S, StartIndex + 1);
+  I := PosIdx(Separator, S, StartIndex);
   if I = 0 then
     I := LenS + 1;
   Result := Copy(S, StartIndex, I - StartIndex);
-  if WideCompareText(Result, Separator) = 0 then
-    Result := '';
+  //if WideCompareText(Result, Separator) = 0 then
+  //  Result := '';
 end;
 
 function SubWord(P: PChar; var P2: PChar): string;
@@ -1786,8 +1792,7 @@ end;
 
 function TrueInflateRect(const R: TRect; const I: Integer): TRect;
 begin
-  with R do
-    SetRect(Result, Left - I, Top - I, Right + I, Bottom + I);
+  SetRect(Result, R.Left - I, R.Top - I, R.Right + I, R.Bottom + I);
 end;
 
 function FileGetInfo(FileName: TFileName; var SearchRec: TSearchRec): Boolean;
@@ -2265,7 +2270,7 @@ end;
 
 function CurrencyToStr(const Cur: Currency): string;
 begin
-  Result := CurrToStrF(Cur, ffCurrency, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}CurrencyDecimals)
+  Result := CurrToStrF(Cur, ffCurrency, JclFormatSettings.CurrencyDecimals)
 end;
 
 function HasChar(const Ch: Char; const S: string): Boolean;
@@ -2422,6 +2427,10 @@ type
     //ExceptionRecord: PExceptionRecord;
   end;
 begin
+  {$IFDEF DELPHI64_TEMPORARY}
+  System.Error(rePlatformNotImplemented);
+  Result := E;
+  {$ELSE ~DELPHI64_TEMPORARY}
   { C++ Builder 3 Warning !}
   { if linker error occured with message "unresolved external 'System::RaiseList'" try
     comment this function implementation, compile,
@@ -2446,6 +2455,7 @@ begin
   Writeln(ErrOutput, 'ChangeTopException');
   Result := E;
   {$ENDIF UNIX}
+  {$ENDIF ~DELPHI64_TEMPORARY}
 end;
 
 function KeyPressed(VK: Integer): Boolean;
@@ -2993,18 +3003,15 @@ procedure InternalFrame3D(Canvas: TCanvas; var Rect: TRect; TopColor, BottomColo
   var
     TopRight, BottomLeft: TPoint;
   begin
-    with Canvas, Rect do
-    begin
-      TopRight.X := Right;
-      TopRight.Y := Top;
-      BottomLeft.X := Left;
-      BottomLeft.Y := Bottom;
-      Pen.Color := TopColor;
-      PolyLine([BottomLeft, TopLeft, TopRight]);
-      Pen.Color := BottomColor;
-      Dec(BottomLeft.X);
-      PolyLine([TopRight, BottomRight, BottomLeft]);
-    end;
+    TopRight.X := Rect.Right;
+    TopRight.Y := Rect.Top;
+    BottomLeft.X := Rect.Left;
+    BottomLeft.Y := Rect.Bottom;
+    Canvas.Pen.Color := TopColor;
+    Canvas.PolyLine([BottomLeft, Rect.TopLeft, TopRight]);
+    Canvas.Pen.Color := BottomColor;
+    Dec(BottomLeft.X);
+    Canvas.PolyLine([TopRight, Rect.BottomRight, BottomLeft]);
   end;
 
 begin
@@ -3613,12 +3620,9 @@ begin
     try
       Result.Width := W;
       Result.Height := H;
-      with Result.Canvas do
-      begin
-        Brush.Color := BackColor;
-        FillRect(Rect(0, 0, W, H));
-        DrawIconEx(Handle, 0, 0, Ico, W, H, 0, 0, DI_NORMAL);
-      end;
+      Result.Canvas.Brush.Color := BackColor;
+      Result.Canvas.FillRect(Rect(0, 0, W, H));
+      DrawIconEx(Result.Canvas.Handle, 0, 0, Ico, W, H, 0, 0, DI_NORMAL);
     except
       Result.Free;
       raise;
@@ -3850,7 +3854,7 @@ begin
     end;
     with BI do
     begin
-      Inc(Longint(Bits), biSizeImage);
+      Inc(INT_PTR(Bits), biSizeImage);
       biBitCount := 1;
       biSizeImage := WidthBytes(Longint(biWidth) * biBitCount) * biHeight;
       biClrUsed := 2;
@@ -4544,7 +4548,6 @@ begin
     end;
     Exit;
   end;
-  Result := DefaultDateOrder; { default }
 end;
 
 function CurrentMonth: Word;
@@ -4584,12 +4587,12 @@ begin
   M := 0;
   D := 0;
   DateOrder := GetDateOrder(DateFormat);
-  if {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat[1] = 'g' then { skip over prefix text }
+  if JclFormatSettings.ShortDateFormat[1] = 'g' then { skip over prefix text }
     ScanToNumber(S, Position);
-  if not (ScanNumber(S, MaxInt, Position, N1) and ScanChar(S, Position, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator) and
+  if not (ScanNumber(S, MaxInt, Position, N1) and ScanChar(S, Position, JclFormatSettings.DateSeparator) and
     ScanNumber(S, MaxInt, Position, N2)) then
     Exit;
-  if ScanChar(S, Position, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator) then
+  if ScanChar(S, Position, JclFormatSettings.DateSeparator) then
   begin
     if not ScanNumber(S, MaxInt, Position, N3) then
       Exit;
@@ -4629,11 +4632,11 @@ begin
       D := N2;
     end;
   end;
-  ScanChar(S, Position, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator);
+  ScanChar(S, Position, JclFormatSettings.DateSeparator);
   ScanBlanks(S, Position);
-  if SysLocale.FarEast and (Pos('ddd', {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat) <> 0) then
+  if SysLocale.FarEast and (Pos('ddd', JclFormatSettings.ShortDateFormat) <> 0) then
   begin { ignore trailing text }
-    if CharInSet({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortTimeFormat[1], ['0'..'9']) then { stop at time digit }
+    if CharInSet(JclFormatSettings.ShortTimeFormat[1], ['0'..'9']) then { stop at time digit }
       ScanToNumber(S, Position)
     else { stop at time prefix }
       repeat
@@ -4641,8 +4644,8 @@ begin
           Inc(Position);
         ScanBlanks(S, Position);
       until (Position > Length(S)) or
-        AnsiSameText({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}TimeAMString, Copy(S, Position, Length({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}TimeAMString))) or
-        AnsiSameText({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}TimePMString, Copy(S, Position, Length({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}TimePMString)));
+        AnsiSameText(JclFormatSettings.TimeAMString, Copy(S, Position, Length(JclFormatSettings.TimeAMString))) or
+        AnsiSameText(JclFormatSettings.TimePMString, Copy(S, Position, Length(JclFormatSettings.TimePMString)));
   end;
   Result := IsValidDate(Y, M, D) and (Position > Length(S));
 end;
@@ -4652,8 +4655,8 @@ begin
   if Length(S) > 0 then
     for Result := 1 to 12 do
     begin
-      if (Length({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}LongMonthNames[Result]) > 0) and
-         AnsiSameText(Copy(S, 1, MaxLen), Copy({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}LongMonthNames[Result], 1, MaxLen)) then
+      if (Length(JclFormatSettings.LongMonthNames[Result]) > 0) and
+         AnsiSameText(Copy(S, 1, MaxLen), Copy(JclFormatSettings.LongMonthNames[Result], 1, MaxLen)) then
         Exit;
     end;
   Result := 0;
@@ -4746,7 +4749,7 @@ end;
 
 function StrToDateDef(const S: string; Default: TDateTime): TDateTime;
 begin
-  if not InternalStrToDate({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat, S, Result) then
+  if not InternalStrToDate(JclFormatSettings.ShortDateFormat, S, Result) then
     Result := Trunc(Default);
 end;
 
@@ -4760,7 +4763,7 @@ function DefDateFormat(AFourDigitYear: Boolean): string;
 begin
   if AFourDigitYear then
   begin
-    case GetDateOrder({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat) of
+    case GetDateOrder(JclFormatSettings.ShortDateFormat) of
       doMDY:
         Result := 'MM/DD/YYYY';
       doDMY:
@@ -4771,7 +4774,7 @@ begin
   end
   else
   begin
-    case GetDateOrder({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat) of
+    case GetDateOrder(JclFormatSettings.ShortDateFormat) of
       doMDY:
         Result := 'MM/DD/YY';
       doDMY:
@@ -4786,7 +4789,7 @@ function DefDateMask(BlanksChar: Char; AFourDigitYear: Boolean): string;
 begin
   if AFourDigitYear then
   begin
-    case GetDateOrder({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat) of
+    case GetDateOrder(JclFormatSettings.ShortDateFormat) of
       doMDY, doDMY:
         Result := '!99/99/9999;1;';
       doYMD:
@@ -4795,7 +4798,7 @@ begin
   end
   else
   begin
-    case GetDateOrder({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat) of
+    case GetDateOrder(JclFormatSettings.ShortDateFormat) of
       doMDY, doDMY:
         Result := '!99/99/99;1;';
       doYMD:
@@ -4839,7 +4842,7 @@ end;
 
 function IsFourDigitYear: Boolean;
 begin
-  Result := Pos('YYYY', AnsiUpperCase({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat)) > 0;
+  Result := Pos('YYYY', AnsiUpperCase(JclFormatSettings.ShortDateFormat)) > 0;
 end;
 { end JvDateUtil }
 
@@ -6769,7 +6772,7 @@ var
   Dummy: DWORD;
 begin
   SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, SPI_SETNONCLIENTMETRICS,
-    LPARAM(PChar('WindowMetrics')), SMTO_NORMAL or SMTO_ABORTIFHUNG, 10000, Dummy);
+    LPARAM(PChar('WindowMetrics')), SMTO_NORMAL or SMTO_ABORTIFHUNG, 10000, {$IFDEF RTL230_UP}@{$ENDIF}Dummy);
 end;
 
 procedure AssociateFileExtension(const IconPath, ProgramName, Path, Extension: string);
@@ -6935,7 +6938,7 @@ end;
 function CharIsMoney(const Ch: Char): Boolean;
 begin
   Result := CharIsDigit(Ch) or (Ch = NativeSpace) or (Ch = '$') or (Ch = '-') or
-    (Pos(Ch, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}CurrencyString) > 0);
+    (Pos(Ch, JclFormatSettings.CurrencyString) > 0);
 end;
 
 function StrToCurrDef(const Str: string; Def: Currency): Currency;
@@ -6950,7 +6953,7 @@ begin
   begin
     LStr := TJclStringBuilder.Create(Length(Str));
     try
-      CharSet := ['0'..'9', '-', '+', AnsiChar({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator)];
+      CharSet := ['0'..'9', '-', '+', AnsiChar(JclFormatSettings.DecimalSeparator)];
       for I := 1 to Length(Str) do
         if CharInSet(Str[I], CharSet) then
           LStr.Append(Str[I]);
@@ -7003,7 +7006,7 @@ var
   LStr: TJclStringBuilder;
   I: Integer;
   CharSet: TSysCharSet;
-  FormatSettings: TFormatSettings;
+  LocalFormatSettings: TFormatSettings;
 begin
   Result := false;
   if Str = '' then
@@ -7011,15 +7014,15 @@ begin
 
   { Locale Handling logic October 2008 supercedes former StrToFloatUS functionality. }
   {$IFDEF RTL150_UP}
-  FormatSettings.ThousandSeparator := GetLocaleChar(LOCALE_SYSTEM_DEFAULT, LOCALE_STHOUSAND, '.');
-  FormatSettings.DecimalSeparator := GetLocaleChar(LOCALE_SYSTEM_DEFAULT, LOCALE_SDECIMAL, '.');
+  LocalFormatSettings.ThousandSeparator := GetLocaleChar(LOCALE_SYSTEM_DEFAULT, LOCALE_STHOUSAND, '.');
+  LocalFormatSettings.DecimalSeparator := GetLocaleChar(LOCALE_SYSTEM_DEFAULT, LOCALE_SDECIMAL, '.');
   {$ELSE}
-  FormatSettings.DecimalSeparator := DecimalSeparator;
+  LocalFormatSettings.DecimalSeparator := DecimalSeparator;
   {$ENDIF RTL150_UP}
   if aDecimalSeparator = ' ' then {magic mode}
-    aDecimalSeparator := FormatSettings.DecimalSeparator { default case! use system defaults! }
+    aDecimalSeparator := LocalFormatSettings.DecimalSeparator { default case! use system defaults! }
   else
-    FormatSettings.DecimalSeparator := aDecimalSeparator; { custom format specified! }
+    LocalFormatSettings.DecimalSeparator := aDecimalSeparator; { custom format specified! }
 
   { Cross-codepage safety feature:  Handed '1.2', a string without a comma,
     but which is obviously a floating point number, convert it properly also.
@@ -7028,7 +7031,7 @@ begin
   if (Pos(USDecimalSeparator, Str) > 0) and (Pos(aDecimalSeparator, Str) = 0) then
   begin
     aDecimalSeparator := USDecimalSeparator; { automatically works when US decimal values are encountered }
-    FormatSettings.DecimalSeparator := aDecimalSeparator; { custom format specified! }
+    LocalFormatSettings.DecimalSeparator := aDecimalSeparator; { custom format specified! }
   end;
 
   LStr := TJclStringBuilder.Create(Length(Str));
@@ -7054,9 +7057,9 @@ begin
         LStr.Append('0');
 
       {$IFDEF RTL150_UP}
-      if not TextToFloat(PChar(LStr.ToString), OutValue, fvExtended, FormatSettings) then
+      if not TextToFloat(PChar(LStr.ToString), OutValue, fvExtended, LocalFormatSettings) then
       {$ELSE}
-      if not TextToFloatD5D6(PChar(LStr.ToString), OutValue, fvExtended, FormatSettings) then
+      if not TextToFloatD5D6(PChar(LStr.ToString), OutValue, fvExtended, LocalFormatSettings) then
       {$ENDIF RTL150_UP}
         Result := False
       else
@@ -7173,7 +7176,7 @@ begin
   for I := 1 to Length(S) do
   begin
     Ch := Char(S[I]);
-    if not CharIsNumberChar(Ch) or (Ch = {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator) then //Az
+    if not CharIsNumberChar(Ch) or (Ch = JclFormatSettings.DecimalSeparator) then //Az
     begin
       Result := False;
       Exit;
@@ -7194,7 +7197,7 @@ begin
     { allow digits, space, Currency symbol and one decimal dot }
     Ch := Ps[I];
 
-    if Ch = {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator then
+    if Ch = JclFormatSettings.DecimalSeparator then
     begin
       Inc(liDots);
       if liDots > 1 then
@@ -7292,12 +7295,12 @@ begin
   { use the StrReplace in stringfunctions -
   the one in JclStrings is badly broken and brings down the app }
 
-  for I := Low({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}LongMonthNames) to High({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}LongMonthNames) do
-    Ps := LStrReplace(Ps, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}LongMonthNames[I], IntToStr(I), False);
+  for I := JclFormatSettings.MonthNamesLowIndex to JclFormatSettings.MonthNamesHighIndex do
+    Ps := LStrReplace(Ps, JclFormatSettings.LongMonthNames[I], IntToStr(I), False);
 
   { now that 'January' is gone, catch 'Jan' }
-  for I := Low({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortMonthNames) to High({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortMonthNames) do
-    Ps := LStrReplace(Ps, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortMonthNames[I], IntToStr(I), False);
+  for I := JclFormatSettings.MonthNamesLowIndex to JclFormatSettings.MonthNamesHighIndex do
+    Ps := LStrReplace(Ps, JclFormatSettings.ShortMonthNames[I], IntToStr(I), False);
 
   { remove redundant spaces }
   Ps := LStrReplace(Ps, NativeSpace + NativeSpace, NativeSpace, False);
@@ -7545,8 +7548,13 @@ procedure ResourceNotFound(ResID: PChar);
 var
   S: string;
 begin
+  {$IFDEF DELPHI64_TEMPORARY}
+  if INT_PTR(ResID) <= $FFFF then
+    S := IntToStr(INT_PTR(ResID))
+  {$ELSE ~DELPHI64_TEMPORARY}
   if LongRec(ResID).Hi = 0 then
     S := IntToStr(LongRec(ResID).Lo)
+  {$ENDIF ~DELPHI64_TEMPORARY}
   else
     S := StrPas(ResID);
   raise EResNotFound.CreateResFmt(@SResNotFound, [S]);
@@ -7768,6 +7776,7 @@ begin
   end;
 end;
 
+{$IFDEF CPU32}
 function CompareMem(fpBlock1, fpBlock2: Pointer; Size: Cardinal): Boolean; assembler;
 asm
         PUSH    ESI
@@ -7788,6 +7797,7 @@ asm
 @@2:    POP     EDI
         POP     ESI
 end;
+{$ENDIF CPU32}
 
 { Manipulate huge pointers routines by Ray Lischner, The Waite Group, Inc. }
 
@@ -7822,102 +7832,56 @@ end;
 
 { String routines }
 
-{ function GetParamStr copied from SYSTEM.PAS unit of Delphi 2.0 }
+procedure SplitCommandLine(const CmdLine: string; var ExeName, Params: string);
 
-function GetParamStr(P: PChar; var Param: string): PChar;
-var
-  Len: Integer;
-  Buffer: array [Byte] of Char;
-begin
-  while True do
+  function SkipString(P: PChar): PChar;
   begin
-    while (P[0] <> #0) and (P[0] <= ' ') do
-      Inc(P);
-    if (P[0] = '"') and (P[1] = '"') then
-      Inc(P, 2)
-    else
-      Break;
-  end;
-  Len := 0;
-  while P[0] > ' ' do
-    if P[0] = '"' then
+    if P^ = '"' then
     begin
       Inc(P);
-      while (P[0] <> #0) and (P[0] <> '"') do
-      begin
-        Buffer[Len] := P[0];
-        Inc(Len);
+      while (P^ <> #0) and (P^ <> '"') do
         Inc(P);
-      end;
-      if P[0] <> #0 then
+      if P^ <> #0 then
         Inc(P);
     end
     else
-    begin
-      Buffer[Len] := P[0];
-      Inc(Len);
-      Inc(P);
-    end;
-  SetString(Param, Buffer, Len);
-  Result := P;
-end;
-
-function ParamCountFromCommandLine(CmdLine: PChar): Integer;
-var
-  S: string;
-  P: PChar;
-begin
-  P := CmdLine;
-  Result := 0;
-  while True do
-  begin
-    P := GetParamStr(P, S);
-    if S = '' then
-      Break;
-    Inc(Result);
+      while P^ > ' ' do
+      begin
+        if P^ = '"' then
+        begin
+          Inc(P);
+          while (P^ <> #0) and (P^ <> '"') do
+            Inc(P);
+          if P^ = #0 then
+            Break;
+        end;
+        Inc(P);
+      end;
+    Result := P;
   end;
-end;
 
-function ParamStrFromCommandLine(CmdLine: PChar; Index: Integer): string;
-var
-  P: PChar;
-begin
-  P := CmdLine;
-  while True do
+  function SkipWhiteChars(P: PChar): PChar;
   begin
-    P := GetParamStr(P, Result);
-    if (Index = 0) or (Result = '') then
-      Break;
-    Dec(Index);
+    Result := P;
+    while (Result^ <> #0) and (Result^ <= ' ') do
+      Inc(Result);
   end;
-end;
 
-procedure SplitCommandLine(const CmdLine: string; var ExeName, Params: string);
 var
-  Buffer: PChar;
-  Cnt, I: Integer;
-  S: string;
+  F, P: PChar;
 begin
   ExeName := '';
   Params := '';
-  Buffer := StrPAlloc(CmdLine);
-  try
-    Cnt := ParamCountFromCommandLine(Buffer);
-    if Cnt > 0 then
-    begin
-      ExeName := ParamStrFromCommandLine(Buffer, 0);
-      for I := 1 to Cnt - 1 do
-      begin
-        S := ParamStrFromCommandLine(Buffer, I);
-        if Pos(' ', S) > 0 then
-          S := '"' + S + '"';
-        Params := Params + S;
-        if I < Cnt - 1 then
-          Params := Params + ' ';
-      end;
-    end;
-  finally
-    StrDispose(Buffer);
+  if CmdLine <> '' then
+  begin
+    F := PChar(CmdLine);
+    P := SkipString(F);
+    if F^ = '"' then
+      SetString(ExeName, F + 1, P - F - 2)
+    else
+      SetString(ExeName, F, P - F);
+    P := SkipWhiteChars(P);
+    SetString(Params, P, StrLen(P));
   end;
 end;
 
@@ -8140,32 +8104,29 @@ var
 begin
   X := GetSystemMetrics(SM_CXSCREEN);
   Y := GetSystemMetrics(SM_CYSCREEN);
-  with Rect do
+  if Rect.Right > X then
   begin
-    if Right > X then
-    begin
-      Delta := Right - Left;
-      Right := X;
-      Left := Right - Delta;
-    end;
-    if Left < 0 then
-    begin
-      Delta := Right - Left;
-      Left := 0;
-      Right := Left + Delta;
-    end;
-    if Bottom > Y then
-    begin
-      Delta := Bottom - Top;
-      Bottom := Y;
-      Top := Bottom - Delta;
-    end;
-    if Top < 0 then
-    begin
-      Delta := Bottom - Top;
-      Top := 0;
-      Bottom := Top + Delta;
-    end;
+    Delta := Rect.Right - Rect.Left;
+    Rect.Right := X;
+    Rect.Left := Rect.Right - Delta;
+  end;
+  if Rect.Left < 0 then
+  begin
+    Delta := Rect.Right - Rect.Left;
+    Rect.Left := 0;
+    Rect.Right := Rect.Left + Delta;
+  end;
+  if Rect.Bottom > Y then
+  begin
+    Delta := Rect.Bottom - Rect.Top;
+    Rect.Bottom := Y;
+    Rect.Top := Rect.Bottom - Delta;
+  end;
+  if Rect.Top < 0 then
+  begin
+    Delta := Rect.Bottom - Rect.Top;
+    Rect.Top := 0;
+    Rect.Bottom := Rect.Top + Delta;
   end;
 end;
 
@@ -8348,8 +8309,8 @@ begin
         Bits, TBitmapInfo(Header^),
         DIB_RGB_COLORS, ACanvas.CopyMode);
     finally
-      VirtualFree(Bits, 0, MEM_FREE);
-      VirtualFree(Header, 0, MEM_FREE);
+      VirtualFree(Bits, 0, MEM_RELEASE);
+      VirtualFree(Header, 0, MEM_RELEASE);
     end;
   finally
     if Bmp <> nil then
@@ -8389,18 +8350,18 @@ var
   CharSet: TSysCharSet;
 begin
   Result := DelRSpace(AValue);
-  if {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator <> {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator then
-    Result := DelChars(Result, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator);
+  if JclFormatSettings.DecimalSeparator <> JclFormatSettings.ThousandSeparator then
+    Result := DelChars(Result, JclFormatSettings.ThousandSeparator);
 
-  if ({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator <> '.') and ({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator <> '.') then
-    Result := ReplaceStr(Result, '.', {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator);
-  if ({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator <> ',') and ({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator <> ',') then
-    Result := ReplaceStr(Result, ',', {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator);
+  if (JclFormatSettings.DecimalSeparator <> '.') and (JclFormatSettings.ThousandSeparator <> '.') then
+    Result := ReplaceStr(Result, '.', JclFormatSettings.DecimalSeparator);
+  if (JclFormatSettings.DecimalSeparator <> ',') and (JclFormatSettings.ThousandSeparator <> ',') then
+    Result := ReplaceStr(Result, ',', JclFormatSettings.DecimalSeparator);
 
   J := 1;
   CharSet := ['0'..'9', '-', '+',
-        AnsiChar({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator),
-        AnsiChar({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator)];
+        AnsiChar(JclFormatSettings.DecimalSeparator),
+        AnsiChar(JclFormatSettings.ThousandSeparator)];
   for I := 1 to Length(Result) do
     if CharInSet(Result[I], CharSet) then
     begin

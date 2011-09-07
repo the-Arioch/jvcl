@@ -1008,6 +1008,9 @@ type
   end;
 
   { main JvInterpreter component }
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvInterpreterProgram = class(TJvInterpreterUnit)
   private
     FPas: TStringList;
@@ -1834,23 +1837,35 @@ begin
             varInteger, { ttByte,} varBoolean:
               begin
                 AInt := Args.Values[I];
+                {$IFNDEF CPU64}
                 asm
                   push AInt
                 end;
+                {$ELSE}
+                {$MESSAGE WARN 'Needs review for x64'}
+                {$ENDIF ~CPU64}
               end;
             varSmallint:
               begin
                 AWord := Word(Args.Values[I]);
+                {$IFNDEF CPU64}
                 asm
                   push AWord
                 end;
+                {$ELSE}
+                {$MESSAGE WARN 'Needs review for x64'}
+                {$ENDIF ~CPU64}
               end;
             varString:
               begin
                 APointer := PChar(string(Args.Values[I]));
+                {$IFNDEF CPU64}
                 asm
                   push APointer
                 end;
+                {$ELSE}
+                {$MESSAGE WARN 'Needs review for x64'}
+                {$ENDIF ~CPU64}
               end;
           else
             JvInterpreterErrorN(ieDllInvalidArgument, -1, FuncName);
@@ -1860,16 +1875,24 @@ begin
             varInteger, { ttByte,} varBoolean:
               begin
                 APointer := @TVarData(Args.Values[I]).VInteger;
+                {$IFNDEF CPU64}
                 asm
                   push APointer
                 end;
+                {$ELSE}
+                {$MESSAGE WARN 'Needs review for x64'}
+                {$ENDIF ~CPU64}
               end;
             varSmallint:
               begin
                 APointer := @TVarData(Args.Values[I]).vSmallInt;
+                {$IFNDEF CPU64}
                 asm
                   push APointer
                 end;
+                {$ELSE}
+                {$MESSAGE WARN 'Needs review for x64'}
+                {$ENDIF ~CPU64}
               end;
           else
             JvInterpreterErrorN(ieDllInvalidArgument, -1, FuncName);
@@ -3805,17 +3828,25 @@ var
               (JvInterpreterMethod.ParamTypes[J] = varBoolean) {?} then
             begin
               AInt := Args.Values[J];
+              {$IFNDEF CPU64}
               asm
                 push AInt
               end;
+              {$ELSE}
+              {$MESSAGE WARN 'Needs review for x64'}
+              {$ENDIF ~CPU64}
             end
             else
             if JvInterpreterMethod.ParamTypes[J] = varSmallint then
             begin
               AWord := Word(Args.Values[J]);
+              {$IFNDEF CPU64}
               asm
                 push AWord
               end;
+              {$ELSE}
+              {$MESSAGE WARN 'Needs review for x64'}
+              {$ENDIF ~CPU64}
             end
             else
               JvInterpreterErrorN(ieDirectInvalidArgument, -1, Identifier);
@@ -3849,6 +3880,7 @@ var
             (JvInterpreterMethod.ResTyp = varEmpty) or
             (JvInterpreterMethod.ResTyp = varObject) or
             (JvInterpreterMethod.ResTyp = varPointer) then
+              {$IFNDEF CPU64}
             asm
               mov      EAX, RegEAX
               mov      EDX, RegEDX
@@ -3856,6 +3888,11 @@ var
               call     Func
               mov      iRes, EAX
             end
+            {$ELSE}
+            begin
+            end
+            {$MESSAGE WARN 'Needs review for x64'}
+            {$ENDIF ~CPU64}
           else
             JvInterpreterErrorN(ieDirectInvalidResult, -1, Identifier);
 
@@ -5045,7 +5082,11 @@ end;
 
 procedure TJvInterpreterExpression.ParseToken;
 var
+  {$IFDEF DELPHI7_UP}
+  FS: TFormatSettings;
+  {$ELSE}
   OldDecimalSeparator: Char;
+  {$ENDIF DELPHI7_UP}
   Dob: Extended;
   Int: Integer;
   Stub: Integer;
@@ -5060,15 +5101,22 @@ begin
       end;
     ttDouble:
       begin
-        OldDecimalSeparator := {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator;
-        {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator := '.';
+        {$IFDEF DELPHI7_UP}
+        FS.ThousandSeparator := ',';
+        FS.DecimalSeparator := '.';
+        if not TextToFloat(PChar(FTokenStr), Dob, fvExtended, FS) then
+          JvInterpreterError(ieInternal, -1);
+        {$ELSE}
+        OldDecimalSeparator := DecimalSeparator;
+        DecimalSeparator := '.';
         if not TextToFloat(PChar(FTokenStr), Dob, fvExtended) then
         begin
-          {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator := OldDecimalSeparator;
+          DecimalSeparator := OldDecimalSeparator;
           JvInterpreterError(ieInternal, -1);
         end
         else
-          {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator := OldDecimalSeparator;
+          DecimalSeparator := OldDecimalSeparator;
+        {$ENDIF DELPHI7_UP}
         FToken := Dob;
       end;
     ttString:
@@ -5140,7 +5188,7 @@ var
     while True do
     begin
       case TTyp of
-        ttInteger, ttDouble, ttString, ttFalse, ttTrue, ttIdentifier:
+        ttInteger, ttDouble, ttFalse, ttTrue, ttIdentifier:
           begin
             Result := Token;
             if TTyp = ttIdentifier then
@@ -5152,6 +5200,18 @@ var
             if TTyp in [ttInteger, ttDouble, ttString,
               ttFalse, ttTrue, ttIdentifier] then
               JvInterpreterError(ieMissingOperator, PosEnd {!!});
+            if Prior(TTyp) < Prior(OpTyp) then
+              Exit;
+          end;
+        ttString:
+          begin
+            Result := '';
+            repeat
+              Result := Result + Token;
+              NextToken;
+              if TTyp in [ttInteger, ttDouble, ttFalse, ttTrue, ttIdentifier] then
+                JvInterpreterError(ieMissingOperator, PosEnd {!!});
+            until TTyp <> ttString;
             if Prior(TTyp) < Prior(OpTyp) then
               Exit;
           end;

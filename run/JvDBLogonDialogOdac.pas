@@ -33,10 +33,14 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
+  {$IFDEF USE_3RDPARTY_CORELAB_ODAC}
   Classes, Forms, Controls, DBAccess, Ora,
   JvBaseDlg, JvAppStorage, JvBaseDBLogonDialog,
-  JvDynControlEngine, JvBaseDBPasswordDialog, JvDynControlEngineIntf;
+  JvDynControlEngine, JvBaseDBPasswordDialog, 
+  {$ENDIF USE_3RDPARTY_CORELAB_ODAC}
+  JvDynControlEngineIntf;
 
+{$IFDEF USE_3RDPARTY_CORELAB_ODAC}
 type
 
   TJvOdacOracleConnectionInfo = class(TJvBaseOracleConnectionInfo)
@@ -70,6 +74,9 @@ type
     property ShowOracleHome: Boolean read FShowOracleHome write FShowOracleHome default False;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDBOdacLogonDialog = class(TJvBaseDBOracleLogonDialog)
   private
     FOraSession: TOraSession;
@@ -172,6 +179,7 @@ type
     property OnSessionConnect: TJvLogonDialogBaseSessionEvent read
         GetOnSessionConnect write SetOnSessionConnect;
   end;
+{$ENDIF USE_3RDPARTY_CORELAB_ODAC}
 
 {$IFDEF UNITVERSIONING}
 const
@@ -185,6 +193,7 @@ const
 
 implementation
 
+{$IFDEF USE_3RDPARTY_CORELAB_ODAC}
 uses
   SysUtils, StdCtrls, Dialogs,
   OraClasses, OraError, OraCall, OraServices,
@@ -380,7 +389,7 @@ begin
       if (E.ErrorCode = 28001) or (E.ErrorCode = 28002) or (E.ErrorCode = 28011) then
         HandleExpiredPassword(E.Message)
       else
-        JVDsaDialogs.MessageDlg(E.Message, mtError, [mbok], 0, dckScreen,
+        JvDSADialogs.MessageDlg(E.Message, mtError, [mbok], 0, dckScreen,
           0, mbDefault, mbDefault, mbDefault, DynControlEngine);
     end;
   end;
@@ -483,7 +492,7 @@ end;
 
 procedure TJvDBOdacLogonDialog.HandleExpiredPassword(const ErrorMessage: string);
 begin
-  if JVDsaDialogs.MessageDlg(ErrorMessage + #13#10 + RsDoYouWantToChangePassword,
+  if JvDSADialogs.MessageDlg(ErrorMessage + #13#10 + RsDoYouWantToChangePassword,
     mtInformation, [mbYes, mbNo], 0, dckScreen,
     0, mbDefault, mbDefault, mbDefault, DynControlEngine) = mrYes then
     if ChangePassword then
@@ -622,6 +631,7 @@ begin
   if Net then
     Result := Result + ' - '+RsNetOptionConnectionList;
 end;
+{$ENDIF USE_3RDPARTY_CORELAB_ODAC}
 
 {$IFDEF UNITVERSIONING}
 initialization

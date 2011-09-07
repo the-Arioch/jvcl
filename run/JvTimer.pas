@@ -35,8 +35,14 @@ uses
   Windows, Messages, SysUtils, ExtCtrls, Classes;
 
 type
+  // TThreadPriority has been marked platform and we don't want the warning
+  {$IFDEF RTL230_UP}{$IFDEF MSWINDOWS}{$WARNINGS OFF}TThreadPriority = Classes.TThreadPriority;{$WARNINGS ON}{$ENDIF RTL230_UP}{$ENDIF MSWINDOWS}
+
   TJvTimerEventTime = (tetPre, tetPost);
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvTimer = class(TComponent)
   private
     FEnabled: Boolean;
@@ -47,9 +53,13 @@ type
     FTimerThread: TThread;
     FTimer: TTimer;
     FEventTime: TJvTimerEventTime;
+    {$IFDEF MSWINDOWS}
     FThreadPriority: TThreadPriority;
+    {$ENDIF MSWINDOWS}
     FInTimerEvent: Boolean;
+    {$IFDEF MSWINDOWS}
     procedure SetThreadPriority(Value: TThreadPriority);
+    {$ENDIF MSWINDOWS}
     procedure SetThreaded(Value: Boolean);
     procedure SetEnabled(Value: Boolean);
     procedure SetInterval(Value: Cardinal);
@@ -68,7 +78,9 @@ type
     property Interval: Cardinal read FInterval write SetInterval default 1000;
     property SyncEvent: Boolean read FSyncEvent write FSyncEvent default True;
     property Threaded: Boolean read FThreaded write SetThreaded default True;
+    {$IFDEF MSWINDOWS}
     property ThreadPriority: TThreadPriority read FThreadPriority write SetThreadPriority default tpNormal;
+    {$ENDIF MSWINDOWS}
     property OnTimer: TNotifyEvent read FOnTimer write SetOnTimer;
   end;
 
@@ -86,12 +98,12 @@ implementation
 
 uses
   Forms, Consts, SyncObjs,
-  JvJVCLUtils, JvResources;
+  JvJVCLUtils, JvResources, JvTypes;
 
 //=== { TJvTimerThread } =====================================================
 
 type
-  TJvTimerThread = class(TThread)
+  TJvTimerThread = class(TJvCustomThread)
   private
     FOwner: TJvTimer;
     FInterval: Cardinal;
@@ -120,6 +132,7 @@ begin
   inherited Create(not Enabled);
   FInterval := 1000;
   FreeOnTerminate := False;
+  ThreadName := Format('%s: %s',[ClassName, Timer.Name]);
 end;
 
 procedure TJvTimerThread.HandleException;
@@ -161,6 +174,7 @@ var
   end;
 
 begin
+  NameThread(ThreadName);
   repeat
     EventTime := FOwner.EventTime;
 
@@ -232,7 +246,9 @@ begin
   FInterval := 1000;
   FSyncEvent := True;
   FThreaded := True;
+  {$IFDEF MSWINDOWS}
   FThreadPriority := tpNormal;
+  {$ENDIF MSWINDOWS}
   FTimerThread := nil;
   FTimer := nil;
 end;
@@ -272,7 +288,9 @@ begin
       TJvTimerThread(FTimerThread).FCurrentDuration := 0;
       TJvTimerThread(FTimerThread).FInterval := FInterval;
 
+      {$IFDEF MSWINDOWS}
       FTimerThread.Priority := FThreadPriority;
+      {$ENDIF MSWINDOWS}
 
       TJvTimerThread(FTimerThread).Paused := False;
     end
@@ -333,6 +351,7 @@ begin
   end;
 end;
 
+{$IFDEF MSWINDOWS}
 procedure TJvTimer.SetThreadPriority(Value: TThreadPriority);
 begin
   if Value <> FThreadPriority then
@@ -342,6 +361,7 @@ begin
       UpdateTimer;
   end;
 end;
+{$ENDIF MSWINDOWS}
 
 procedure TJvTimer.Synchronize(Method: TThreadMethod);
 begin

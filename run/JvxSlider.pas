@@ -109,8 +109,6 @@ type
     procedure InternalDrawPoints(ACanvas: TCanvas; PointsStep, PointsHeight,
       ExtremePointsHeight: Longint);
     procedure DrawThumb(Canvas: TCanvas; Origin: TPoint; Highlight: Boolean);
-    function GetValueByOffset(Offset: Integer): Longint;
-    function GetOffsetByValue(Value: Longint): Integer;
     function GetRulerLength: Integer;
     procedure WMPaint(var Msg: TWMPaint); message WM_PAINT;
     procedure WMSetCursor(var Msg: TWMSetCursor); message WM_SETCURSOR;
@@ -171,6 +169,8 @@ type
     destructor Destroy; override;
     procedure DefaultDrawPoints(PointsStep, PointsHeight,
       ExtremePointsHeight: Longint); virtual;
+    function GetValueByOffset(Offset: Integer): Longint;
+    function GetOffsetByValue(Value: Longint): Integer;
     property Canvas;
     property RulerLength: Integer read GetRulerLength;
     property Increment: Longint read FIncrement write SetIncrement default 10;
@@ -179,6 +179,9 @@ type
     property Value: Longint read FValue write SetValue default 0;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvxSlider = class(TJvCustomSlider)
   published
     property Align;

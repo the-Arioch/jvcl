@@ -404,7 +404,7 @@ procedure TJvCustomDropButton.MouseEnter(Control: TControl);
 begin
   inherited MouseEnter(Control);
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled and Enabled and not (csDesigning in ComponentState) then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and Enabled and not (csDesigning in ComponentState) then
     Invalidate;
   {$ENDIF JVCLThemesEnabled}
 end;
@@ -413,7 +413,7 @@ procedure TJvCustomDropButton.MouseLeave(Control: TControl);
 begin
   inherited MouseLeave(Control);
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled and Enabled and not (csDesigning in ComponentState) then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and Enabled and not (csDesigning in ComponentState) then
     Invalidate;
   {$ENDIF JVCLThemesEnabled}
 end;
@@ -435,7 +435,7 @@ begin
   { Draw vertical 'bar' }
   Canvas.Pen.Color := clBtnShadow;
   DrawLine(Canvas, Rec.Left, Rec.Top + 4, Rec.Left, Rec.Bottom - 4);
-  Canvas.Pen.Color := clBtnHighLight;
+  Canvas.Pen.Color := clBtnHighlight;
   DrawLine(Canvas, Rec.Left + 1, Rec.Top + 4, Rec.Left + 1, Rec.Bottom - 4);
 
   { Draw arrow }

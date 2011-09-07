@@ -491,6 +491,7 @@ begin
     {$ENDIF BCB}
     {$IFDEF DELPHI}
     Repository := Installations.DelphiInstallationFromVersion[
+      {$IFDEF DELPHI16} 16 {$ENDIF}
       {$IFDEF DELPHI15} 15 {$ENDIF}
       {$IFDEF DELPHI14} 14 {$ENDIF}
       {$IFDEF DELPHI12} 12 {$ENDIF}
@@ -799,6 +800,18 @@ begin
       {$IFDEF COMPILER11}
       Project.AddFile('JvCoreD11R.bpi', False)
       {$ENDIF COMPILER11}
+      {$IFDEF COMPILER12}
+      Project.AddFile('JvCoreD12R.bpi', False)
+      {$ENDIF COMPILER12}
+      {$IFDEF COMPILER14}
+      Project.AddFile('JvCoreD14R.bpi', False)
+      {$ENDIF COMPILER14}
+      {$IFDEF COMPILER15}
+      Project.AddFile('JvCoreD15R.bpi', False)
+      {$ENDIF COMPILER15}
+      {$IFDEF COMPILER16}
+      Project.AddFile('JvCoreD16R.bpi', False)
+      {$ENDIF COMPILER16}
     end
   end
   else
@@ -821,6 +834,18 @@ begin
       {$IFDEF COMPILER11}
       Project.AddFile('JvCoreD11R.dcp', False);
       {$ENDIF COMPILER11}
+      {$IFDEF COMPILER12}
+      Project.AddFile('JvCoreD12R.dcp', False);
+      {$ENDIF COMPILER12}
+      {$IFDEF COMPILER14}
+      Project.AddFile('JvCoreD14R.dcp', False);
+      {$ENDIF COMPILER14}
+      {$IFDEF COMPILER15}
+      Project.AddFile('JvCoreD15R.dcp', False);
+      {$ENDIF COMPILER15}
+      {$IFDEF COMPILER16}
+      Project.AddFile('JvCoreD16R.dcp', False);
+      {$ENDIF COMPILER16}
     end
   end;
 

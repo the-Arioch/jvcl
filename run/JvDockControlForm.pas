@@ -331,6 +331,9 @@ type
 
   TJvDockPosition = (dpLeft, dpRight, dpTop, dpBottom, dpCustom); {dpCustom NEW!}
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDockServer = class(TJvDockBaseControl)
   private
     FDockPanelClass: TJvDockPanelClass;
@@ -431,6 +434,9 @@ type
   TJvDockPaintDockSplitterEvent = TJvDockPaintDockEvent;
   TJvDockFormHintEvent = procedure(HTFlag: Integer; var HintStr: string; var CanShow: Boolean) of object;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDockClient = class(TJvDockBaseControl)
   private
     FConjoinPanelClass: TJvDockConjoinPanelClass;
@@ -888,9 +894,7 @@ var
 
 function IsWinXP_UP: Boolean;
 begin
-  Result := (Win32Platform = VER_PLATFORM_WIN32_NT) and
-    ((Win32MajorVersion > 5) or
-    (Win32MajorVersion = 5) and (Win32MinorVersion >= 1));
+  Result := (Win32Platform = VER_PLATFORM_WIN32_NT) and CheckWin32Version(5, 1);
 end;
 
 procedure ApplyShowingChanged;
@@ -2554,7 +2558,7 @@ procedure TJvDockBasicStyle.FormPositionDockRect(DockClient: TJvDockClient;
 var
   NewWidth, NewHeight: Integer;
   TempX, TempY: Double;
-  R, TempDockRect: TRect;
+  R: TRect;
 begin
   with Source do
   begin
@@ -2562,19 +2566,14 @@ begin
     begin
       NewWidth := Control.UndockWidth;
       NewHeight := Control.UndockHeight;
-
       TempX := DragPos.X - ((NewWidth) * MouseDeltaX);
       TempY := DragPos.Y - ((NewHeight) * MouseDeltaY);
-      TempDockRect := DockRect;
-      with TempDockRect do
-      begin
-        Left := Round(TempX);
-        Top := Round(TempY);
-        Right := Left + NewWidth;
-        Bottom := Top + NewHeight;
-      end;
-      DockRect := TempDockRect;
-
+      R := DockRect;
+      R.Left := Round(TempX);
+      R.Top := Round(TempY);
+      R.Right := R.Left + NewWidth;
+      R.Bottom := R.Top + NewHeight;
+      DockRect := R;
       AdjustDockRect(DockRect);
     end
     else
@@ -3648,7 +3647,7 @@ end;
 
 procedure TJvDockConjoinPanel.DockDrop(Source: TDragDockObject; X, Y: Integer);
 begin
-  if Perform(CM_DOCKCLIENT, WPARAM(Source), LPARAM(SmallPoint(X, Y))) >= 0 then
+  if Perform(CM_DOCKCLIENT, WPARAM(Source), {$IFDEF RTL230_UP}PointToLParam{$ELSE}LPARAM{$ENDIF RTL230_UP}(SmallPoint(X, Y))) >= 0 then
   begin
     if Source.Control is TForm then
     begin
@@ -3836,7 +3835,7 @@ end;
 
 procedure TJvDockPanel.DockDrop(Source: TDragDockObject; X, Y: Integer);
 begin
-  if Perform(CM_DOCKCLIENT, WPARAM(Source), LPARAM(SmallPoint(X, Y))) >= 0 then
+  if Perform(CM_DOCKCLIENT, WPARAM(Source), {$IFDEF RTL230_UP}PointToLParam{$ELSE}LPARAM{$ENDIF RTL230_UP}(SmallPoint(X, Y))) >= 0 then
   begin
     if Source.Control is TForm then
     begin
@@ -4756,7 +4755,7 @@ begin
     try
       DragDockObject.DockRect := Source.DockRect;
       DragDockObject.Control := Source.Control;
-      Perform(CM_DOCKCLIENT, WPARAM(DragDockObject), LPARAM(SmallPoint(X, Y)));
+      Perform(CM_DOCKCLIENT, WPARAM(DragDockObject), {$IFDEF RTL230_UP}PointToLParam{$ELSE}LPARAM{$ENDIF RTL230_UP}(SmallPoint(X, Y)));
       UpdateCaption(nil);
     finally
       DragDockObject.Free;
@@ -4833,7 +4832,7 @@ end;
 procedure TJvDockTabPageControl.DockDrop(Source: TDragDockObject; X,
   Y: Integer);
 begin
-  if Perform(CM_DOCKCLIENT, WPARAM(Source), LPARAM(SmallPoint(X, Y))) >= 0 then
+  if Perform(CM_DOCKCLIENT, WPARAM(Source), {$IFDEF RTL230_UP}PointToLParam{$ELSE}LPARAM{$ENDIF RTL230_UP}(SmallPoint(X, Y))) >= 0 then
   begin
     if Source.Control is TForm then
     begin

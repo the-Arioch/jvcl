@@ -131,6 +131,9 @@ type
     property Caption: string read FCaption write FCaption;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvLoginDialog = class(TJvCustomLogin)
   private
     FOnCheckUser: TJvLoginEvent;
@@ -185,6 +188,8 @@ type
     FOnFormShow: TNotifyEvent;
     FOnOkClick: TNotifyEvent;
     FOnGetPassword: TJvOnGetPassword;
+  protected
+    procedure CreateParams(var Params: TCreateParams); override;
   public
     AttemptNumber: Integer;
     property Attempt: Integer read FAttempt;
@@ -576,6 +581,14 @@ begin
 end;
 
 //=== { TJvLoginForm } =======================================================
+
+procedure TJvLoginForm.CreateParams(var Params: TCreateParams);
+begin
+  inherited CreateParams(Params);
+
+  // required for latest versions of Delphi to cooperate nicely with latest versions of Windows
+  Params.ExStyle := Params.ExStyle or WS_EX_APPWINDOW;
+end;
 
 procedure TJvLoginForm.FormCreate(Sender: TObject);
 begin

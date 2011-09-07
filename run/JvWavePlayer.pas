@@ -37,6 +37,9 @@ uses
   JvTypes, JvComponentBase;
 
 type
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvWavePlayer = class(TJvComponent)
   private
     FAsynchronous: Boolean;
@@ -53,6 +56,7 @@ type
     destructor Destroy; override;
     function Play: Boolean;
     procedure Stop;
+    procedure Silence;
     property WavePointer: Pointer read FWavePointer write FWavePointer;
   published
     property Asynchronous: Boolean read FAsynchronous write SetAsynchronous default True;
@@ -146,6 +150,12 @@ begin
   if Assigned(FAfterPlaying) and (Loop or Asynchronous) and
     not (csDestroying in ComponentState) then
     FAfterPlaying(Self);
+end;
+
+procedure TJvWavePlayer.Silence;
+begin
+  // Immediately stops the WAV from playing and purges any remaining WAV audio from the queue.
+  PlaySound(nil, 0, SND_PURGE);
 end;
 
 {$IFDEF UNITVERSIONING}

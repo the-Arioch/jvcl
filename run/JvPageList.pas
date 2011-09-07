@@ -75,7 +75,7 @@ type
     FData: TObject;
   protected
     procedure CreateParams(var Params: TCreateParams); override;
-    function DoEraseBackground(Canvas: TCanvas; Param: Integer): Boolean; override;
+    function DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean; override;
     procedure SetPageIndex(Value: Integer);virtual;
     function GetPageIndex: Integer;virtual;
     procedure SetPageList(Value: TJvCustomPageList);virtual;
@@ -114,7 +114,10 @@ type
    TJvCustomPageList is a base class for components that implements the IPageList interface.
     It works like TPageControl but does not have any tabs
    }
-  TJvShowDesignCaption = (sdcNone, sdcTopLeft, sdcTopCenter, sdcTopRight, sdcLeftCenter, sdcCenter, sdcRightCenter, sdcBottomLeft, sdcBottomCenter, sdcBottomRight, sdcRunTime);
+  TJvShowDesignCaption = (
+    sdcNone, sdcTopLeft, sdcTopCenter, sdcTopRight, sdcLeftCenter, sdcCenter,
+    sdcRightCenter, sdcBottomLeft, sdcBottomCenter, sdcBottomRight, sdcRunTime
+  );
 
   TJvCustomPageList = class(TJvCustomControl, IUnknown, IPageList)
   private
@@ -140,7 +143,7 @@ type
     function GetActivePageIndex: Integer; virtual;
     procedure SetActivePageIndex(AIndex: Integer); virtual;
     function GetPageFromIndex(AIndex: Integer): TJvCustomPage; virtual;
-    function GetPageCount: Integer;virtual;
+    function GetPageCount: Integer; virtual;
     function GetPageCaption(AIndex: Integer): string; virtual;
     procedure Paint; override;
     procedure PageCaptionChanged(Index: Integer; const NewCaption: string); virtual;
@@ -221,6 +224,9 @@ type
     {$ENDIF JVCLThemesEnabled}
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvPageList = class(TJvCustomPageList)
   protected
     function InternalGetPageClass: TJvCustomPageClass; override;
@@ -292,25 +298,25 @@ const
 implementation
 
 uses
-  JvResources,
-  Forms;
+  Forms,
+  JvResources;
 
 function GetUniqueName(AOwner: TComponent; const AClassName: string): string;
 var
-  i: Integer;
+  I: Integer;
 begin
-  i := 0;
+  I := 0;
   if AOwner = nil then
   begin
     repeat
-      Inc(i);
-      Result := AClassName + IntToStr(i);
+      Inc(I);
+      Result := AClassName + IntToStr(I);
     until FindGlobalComponent(Result) = nil;
   end
   else
     repeat
-      Inc(i);
-      Result := AClassName + IntToStr(i);
+      Inc(I);
+      Result := AClassName + IntToStr(I);
     until AOwner.FindComponent(Result) = nil;
 end;
 
@@ -327,19 +333,17 @@ begin
   DoubleBuffered := True;
 end;
 
+destructor TJvCustomPage.Destroy;
+begin
+  PageList := nil;
+  inherited Destroy;
+end;
 
 procedure TJvCustomPage.CreateParams(var Params: TCreateParams);
 begin
   inherited CreateParams(Params);
   with Params.WindowClass do
     Style := Style and not (CS_HREDRAW or CS_VREDRAW);
-end;
-
-
-destructor TJvCustomPage.Destroy;
-begin
-  PageList := nil;
-  inherited Destroy;
 end;
 
 procedure TJvCustomPage.DoAfterPaint(ACanvas: TCanvas; ARect: TRect);
@@ -474,13 +478,18 @@ begin
   end;
 end;
 
-function TJvCustomPage.DoEraseBackground(Canvas: TCanvas; Param: Integer): Boolean;
+function TJvCustomPage.DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean;
 begin
-  {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled then
-    DrawThemedBackground(Self, Canvas, ClientRect, Color, ParentBackground);
-  {$ENDIF JVCLThemesEnabled}
-  Result := True;
+  if DoubleBuffered then
+    Result := inherited DoEraseBackground(Canvas, Param)
+  else
+  begin
+    {$IFDEF JVCLThemesEnabled}
+    if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
+      DrawThemedBackground(Self, Canvas, ClientRect, Color, ParentBackground);
+    {$ENDIF JVCLThemesEnabled}
+    Result := True;
+  end;
 end;
 
 procedure TJvCustomPage.TextChanged;
@@ -505,22 +514,15 @@ end;
 procedure TJvCustomPage.ShowingChanged;
 begin
   inherited ShowingChanged;
-  if Showing then
-    try
+  try
+    if Showing then
       DoShow
-    except
-      Application.HandleException(Self);
-    end
-  else
-  if not Showing then
-    try
+    else
       DoHide;
-    except
-      Application.HandleException(Self);
-    end;
+  except
+    Application.HandleException(Self);
+  end;
 end;
-
-
 
 //=== { TJvCustomPageList } ==================================================
 
@@ -550,7 +552,7 @@ end;
 
 function TJvCustomPageList.CanChange(AIndex: Integer): Boolean;
 begin
-  Result := (AIndex >= 0) and (AIndex < GetPageCount);
+  Result := (AIndex >= 0) and (AIndex < PageCount);
   if Result and Assigned(FOnChanging) then
     FOnChanging(Self, AIndex, Result);
 end;
@@ -561,7 +563,6 @@ begin
     FOnChange(Self);
 end;
 
-
 procedure TJvCustomPageList.CMDesignHitTest(var Msg: TCMDesignHitTest);
 var
   Pt: TPoint;
@@ -571,7 +572,6 @@ begin
   if Assigned(ActivePage) and PtInRect(ActivePage.BoundsRect, Pt) then
     Msg.Result := 1;
 end;
-
 
 procedure TJvCustomPageList.GetChildren(Proc: TGetChildProc;
   Root: TComponent);
@@ -591,7 +591,7 @@ end;
 
 function TJvCustomPageList.GetPageCaption(AIndex: Integer): string;
 begin
-  if (AIndex >= 0) and (AIndex < GetPageCount) then
+  if (AIndex >= 0) and (AIndex < PageCount) then
     Result := TJvCustomPage(FPages[AIndex]).Caption
   else
     Result := '';
@@ -619,13 +619,13 @@ end;
 procedure TJvCustomPageList.Loaded;
 begin
   inherited Loaded;
-  if (GetPageCount > 0) and (ActivePage = nil) then
+  if (PageCount > 0) and (ActivePage = nil) then
     ActivePage := Pages[0];
 end;
 
 procedure TJvCustomPageList.Paint;
 begin
-  if (csDesigning in ComponentState) and (GetPageCount = 0) then
+  if (csDesigning in ComponentState) and (PageCount = 0) then
     with Canvas do
     begin
       Pen.Color := clBlack;
@@ -667,7 +667,7 @@ end;
 
 function TJvCustomPageList.GetPageFromIndex(AIndex: Integer): TJvCustomPage;
 begin
-  if (AIndex >= 0) and (AIndex < GetPageCount) then
+  if (AIndex >= 0) and (AIndex < PageCount) then
     Result := TJvCustomPage(Pages[AIndex])
   else
     Result := nil;
@@ -757,7 +757,7 @@ begin
   if not (csLoading in ComponentState) and not CanChange(FPages.IndexOf(Page)) then
     Exit;
 
-  if GetPageCount = 0 then
+  if PageCount = 0 then
     FActivePage := nil;
   if (Page = nil) or (Page.PageList <> Self) then
     Exit
@@ -775,14 +775,13 @@ begin
       end;
     end;
 
-    {$IFDEF COMPILER9_UP}
-    for I := 0 to GetPageCount - 1 do
-      if Pages[i] <> Page then
-        Pages[i].Hide;
-    {$ELSE}
     Page.BringToFront;
-    {$ENDIF COMPILER9_UP}
     Page.Visible := True;
+    {$IFDEF COMPILER9_UP}
+    for I := 0 to PageCount - 1 do
+      if Pages[i] <> Page then
+        Pages[i].Visible := False;
+    {$ENDIF COMPILER9_UP}
     if (ParentForm <> nil) and (FActivePage <> nil) and (ParentForm.ActiveControl = FActivePage) then
     begin
       if Page.CanFocus then

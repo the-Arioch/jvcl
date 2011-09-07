@@ -45,7 +45,7 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  Messages, Classes, Controls, DB, DBCtrls,
+  Windows, Messages, Classes, Controls, DB, DBCtrls,
   JvDatePickerEdit;
 
 type
@@ -65,6 +65,7 @@ type
     procedure CMGetDataLink(var Msg: TMessage); message CM_GETDATALINK;
     function GetInternalDate: TDateTime;
     procedure SetInternalDate(const Value: TDateTime);
+    function GetField: TField;
   protected
     procedure WMCut(var Msg: TMessage); message WM_CUT;
     procedure WMPaste(var Msg: TMessage); message WM_PASTE;
@@ -93,8 +94,12 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     function IsEmpty: Boolean; override;
+    property Field: TField read GetField;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDBDatePickerEdit = class(TJvCustomDBDatePickerEdit)
   public
     property Checked;
@@ -226,7 +231,7 @@ end;
 
 procedure TJvCustomDBDatePickerEdit.CMGetDataLink(var Msg: TMessage);
 begin
-  Msg.Result := Integer(FDataLink);
+  Msg.Result := LRESULT(FDataLink);
 end;
 
 constructor TJvCustomDBDatePickerEdit.Create(AOwner: TComponent);
@@ -329,6 +334,11 @@ begin
    temporary disable it}
   if InternalChanging or Leaving then
     Result := Result and IsLinked and FDataLink.Editing;
+end;
+
+function TJvCustomDBDatePickerEdit.GetField: TField;
+begin
+  Result := FDataLink.Field;
 end;
 
 function TJvCustomDBDatePickerEdit.IsEmpty: Boolean;

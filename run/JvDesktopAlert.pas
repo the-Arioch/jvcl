@@ -192,6 +192,9 @@ type
     property StyleOptions: TJvCustomDesktopAlertStyleHandler read FStyleHandler write SetStyleHandler;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDesktopAlert = class(TJvCustomDesktopAlert)
   private
     FImages: TCustomImageList;
@@ -304,6 +307,9 @@ type
     property StyleOptions;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDesktopAlertStack = class(TJvComponent)
   private
     FItems: TList;
@@ -338,8 +344,6 @@ type
     FDisplayDuration: Cardinal;
     FCurrentStep: Cardinal;
     FStatus: TJvStyleHandlerStatus;
-    procedure SetDisplayDuration(const Value: Cardinal);
-    procedure SetOwnerForm(const Value: TJvCustomFormDesktopAlert);
     function GetActive: Boolean;
   protected
     procedure SetEndInterval(const Value: Cardinal); virtual;
@@ -400,7 +404,7 @@ type
     procedure AbortAnimation; virtual;
     // The owner form, the form to which the style is associated.
     // This value MUST NOT be nil when any of the DoXXXX function is called
-    property OwnerForm: TJvCustomFormDesktopAlert read FOwnerForm write SetOwnerForm;
+    property OwnerForm: TJvCustomFormDesktopAlert read FOwnerForm write FOwnerForm;
     // The current step in the animation (starts at 0, use Active to know
     // if an animation or wait is in progress).
     property CurrentStep: Cardinal read FCurrentStep;
@@ -419,7 +423,7 @@ type
     property EndSteps: Cardinal read FEndSteps write SetEndSteps;
     // The duration of the middle wait (between the end of the start
     // animation and the beginning of the end animation)
-    property DisplayDuration: Cardinal read FDisplayDuration write SetDisplayDuration;
+    property DisplayDuration: Cardinal read FDisplayDuration write FDisplayDuration;
   end;
 
   // This style will make the form fade in and fade out.
@@ -1263,20 +1267,7 @@ begin
     FEndSteps := 1;
 end;
 
-procedure TJvCustomDesktopAlertStyleHandler.SetDisplayDuration(
-  const Value: Cardinal);
-begin
-  FDisplayDuration := Value;
-end;
-
-procedure TJvCustomDesktopAlertStyleHandler.SetOwnerForm(
-  const Value: TJvCustomFormDesktopAlert);
-begin
-  FOwnerForm := Value;
-end;
-
-procedure TJvCustomDesktopAlertStyleHandler.SetStartInterval(
-  const Value: Cardinal);
+procedure TJvCustomDesktopAlertStyleHandler.SetStartInterval(const Value: Cardinal);
 begin
   FStartInterval := Value;
 end;

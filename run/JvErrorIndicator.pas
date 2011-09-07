@@ -111,6 +111,9 @@ type
     property Height default 16;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvErrorIndicator = class(TJvComponent, IUnknown, IJvErrorIndicator)
   private
     FUpdateCount: Integer;
@@ -228,7 +231,7 @@ const
 type
   TJvBlinkThreadEvent = procedure(Sender: TObject; Erase: Boolean) of object;
 
-  TJvBlinkThread = class(TThread)
+  TJvBlinkThread = class(TJvCustomThread)
   private
     FBlinkRate: Integer;
     FErase: Boolean;
@@ -761,6 +764,7 @@ end;
 
 procedure TJvBlinkThread.Execute;
 begin
+  NameThread(ThreadName);
   FErase := False;
   while not Terminated and not Suspended do
   begin

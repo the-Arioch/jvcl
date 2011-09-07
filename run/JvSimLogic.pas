@@ -47,7 +47,7 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  Windows, Messages, Graphics, Controls, Forms, Dialogs, Extctrls,
+  Windows, Messages, Graphics, Controls, Forms, Dialogs, ExtCtrls,
   SysUtils, Classes,
   JvTypes;
 
@@ -80,6 +80,9 @@ type
   TJvConPos = (jcpTL, jcpTR, jcpBR, jcpBL);
   TJvConShape = (jcsTLBR, jcsTRBL);
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvSIMConnector = class(TGraphicControl)
   private
     FMdp: TPoint;
@@ -137,6 +140,9 @@ type
 
   TJvLogicGates = array [0..5] of TJvGate;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvLogic = class(TGraphicControl)
   private
     FDoMove: Boolean;
@@ -189,6 +195,9 @@ type
 
   TJvSimReverseGates = array [0..3] of TJvGate;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvSimReverse = class(TGraphicControl)
   private
     FDoMove: Boolean;
@@ -228,6 +237,9 @@ type
     property Output3: Boolean read FOutput3 write SetOutput3;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvSimButton = class(TGraphicControl)
   private
     FDoMove: Boolean;
@@ -255,6 +267,9 @@ type
     property Down: Boolean read FDown write SetDown;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvSimLight = class(TGraphicControl)
   private
     FDoMove: Boolean;
@@ -295,9 +310,11 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Paint; override;
-  published
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvSimLogicBox = class(TGraphicControl)
   private
     FCpu: TTimer;
@@ -327,7 +344,6 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Paint; override;
-  published
   end;
 
 {$IFDEF UNITVERSIONING}
@@ -706,11 +722,12 @@ end;
 procedure TJvSIMConnector.Notification(AComponent: TComponent;
   Operation: TOperation);
 begin
+  inherited Notification(AComponent, Operation);
   if (Operation = opRemove) then
-  if (AComponent = FromLogic) then
-    FromLogic := nil
-  else if (AComponent = ToLogic) then
-    ToLogic := nil;
+    if (AComponent = FromLogic) then
+      FromLogic := nil
+    else if (AComponent = ToLogic) then
+      ToLogic := nil;
 end;
 
 procedure TJvSIMConnector.Paint;

@@ -90,6 +90,9 @@ type
   TJclHackSimpleXML = class(TJclSimpleXML)
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvSimpleXML = class(TComponent)
   private
     FJclSimpleXML: TJclHackSimpleXML;
@@ -130,8 +133,8 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure LoadFromString(const Value: string);
-    procedure LoadFromFile(const FileName: TFileName);
-    procedure LoadFromStream(Stream: TStream);
+    procedure LoadFromFile(const FileName: TFileName; Encoding: TJclStringEncoding = seAuto; CodePage: Word = CP_ACP);
+    procedure LoadFromStream(Stream: TStream; Encoding: TJclStringEncoding = seAuto; CodePage: Word = CP_ACP);
     procedure LoadFromResourceName(Instance: THandle; const ResName: string);
     procedure SaveToFile(FileName: TFileName; Encoding: TJclStringEncoding = seAuto; CodePage: Word = CP_ACP);
     procedure SaveToStream(Stream: TStream; Encoding: TJclStringEncoding = seAuto; CodePage: Word = CP_ACP);
@@ -354,9 +357,10 @@ begin
   Result := FJclSimpleXML.Root;
 end;
 
-procedure TJvSimpleXML.LoadFromFile(const FileName: TFileName);
+procedure TJvSimpleXML.LoadFromFile(const FileName: TFileName; Encoding: TJclStringEncoding = seAuto; CodePage: Word =
+    CP_ACP);
 begin
-  FJclSimpleXML.LoadFromFile(FileName);
+  FJclSimpleXML.LoadFromFile(FileName, Encoding, CodePage);
 end;
 
 procedure TJvSimpleXML.LoadFromResourceName(Instance: THandle;
@@ -365,9 +369,9 @@ begin
   FJclSimpleXML.LoadFromResourceName(Instance, ResName);
 end;
 
-procedure TJvSimpleXML.LoadFromStream(Stream: TStream);
+procedure TJvSimpleXML.LoadFromStream(Stream: TStream; Encoding: TJclStringEncoding = seAuto; CodePage: Word = CP_ACP);
 begin
-  FJclSimpleXML.LoadFromStream(Stream);
+  FJclSimpleXML.LoadFromStream(Stream, Encoding, CodePage);
 end;
 
 procedure TJvSimpleXML.LoadFromString(const Value: string);

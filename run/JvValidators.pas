@@ -135,8 +135,12 @@ type
   end;
 
   TJvRequiredFieldValidator = class(TJvBaseValidator)
+  private
+    FAllowBlank: Boolean;
   protected
     procedure Validate; override;
+  published
+    property AllowBlank: Boolean read FAllowBlank write FAllowBlank default true;
   end;
 
   TJvValidateCompareOperator = (vcoLessThan, vcoLessOrEqual, vcoEqual, vcoGreaterOrEqual, vcoGreaterThan, vcoNotEqual);
@@ -213,6 +217,9 @@ type
 
   TJvValidateFailEvent = procedure(Sender: TObject; BaseValidator: TJvBaseValidator; var Continue: Boolean) of object;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvValidators = class(TJvComponent)
   private
     FOnValidateFailed: TJvValidateFailEvent;
@@ -243,6 +250,9 @@ type
     property OnValidateFailed: TJvValidateFailEvent read FOnValidateFailed write FOnValidateFailed;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvValidationSummary = class(TJvComponent, IUnknown, IJvValidationSummary)
   private
     FUpdateCount: Integer;
@@ -544,7 +554,10 @@ begin
     varByte:
       ; // nothing to do because all values are valid
   else
-    Valid := VarCompareValue(R, '') <> vrEqual;
+    if FAllowBlank then
+      Valid := VarCompareValue(R, '') <> vrEqual
+    else
+      Valid := Trim(VarToStr(R)) <> '';
   end;
 end;
 
@@ -686,10 +699,13 @@ begin
   if ReplaceComponentReference(Self, Value, TComponent(FCompareToControl)) then
     if FCompareToControl <> nil then
     begin
-      if Supports(FCompareToControl, IJvValidationProperty, Obj) then
-        CompareToProperty := Obj.GetValidationPropertyName
-      else
-        CompareToProperty := '';
+      if not (csLoading in ComponentState) then
+      begin
+        if Supports(FCompareToControl, IJvValidationProperty, Obj) then
+          CompareToProperty := Obj.GetValidationPropertyName
+        else
+          CompareToProperty := '';
+      end;
     end;
 end;
 

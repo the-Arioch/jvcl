@@ -81,7 +81,7 @@ begin
   RegisterComponents(RsPaletteSliderSplitter, [TJvSplitter, TJvxSplitter,
     TJvSyncSplitter, TJvNetscapeSplitter]);
   RegisterComponents(RsPaletteVisual, [TJvClock, TJvCharMap, TJvZoom, TJvDice]);
-  RegisterComponents(RsPaletteNonVisual, [TJvHint]);
+  RegisterComponents(RsPaletteNonVisual, [TJvHint, TJvControlActionList]);
 
   RegisterPropertyEditor(TypeInfo(TCaption), TJvHTLabel, 'Caption', TJvHintProperty);
   RegisterPropertyEditor(TypeInfo(TJvLabelBehaviorName), TJvBehaviorLabel, 'Behavior', TJvLabelBehaviorProperty);
@@ -105,7 +105,7 @@ begin
   RegisterClass(TJvScrollMaxBand);
   RegisterClass(TJvFooterBtn);
   RegisterActions(RsJVCLActionsCategory, [TJvRollOutAction], nil);
-  RegisterActions(RsJVCLControlActionsCategory, [TJvControlCollapseAction, TJvControlExpandAction, TJvControlExportAction,
+  RegisterActions(RsJVCLControlActionsCategory, [TJvControlCommonAction, TJvControlCollapseAction, TJvControlExpandAction, TJvControlExportAction,
     TJvControlOptimizeColumnsAction, TJvControlCustomizeColumnsAction, TJvControlPrintAction, TJvControlCustomizeAction],
     TJvControlActionsDM);
     

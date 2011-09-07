@@ -83,6 +83,9 @@ type
       Operation: TOperation); override;
     property _BandObject: TComObject read FBandObject;
   public
+    procedure AfterConstruction; override;
+    procedure BeforeDestruction; override;
+
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     {:Band form constructor.
@@ -301,7 +304,25 @@ const
 implementation
 
 uses
-  JvJCLUtils, JvJVCLUtils;
+  SysUtils, JclIDEUtils, JvJCLUtils, JvJVCLUtils;
+
+var
+  GlobalBandFormMessageHook: HHook;
+  GlobalBandForms: TList;
+
+//=== { TJvBandForm } ========================================================
+
+procedure TJvBandForm.AfterConstruction;
+begin
+  inherited AfterConstruction;
+  GlobalBandForms.Add(Self);
+end;
+
+procedure TJvBandForm.BeforeDestruction;
+begin
+  GlobalBandForms.Remove(Self);
+  inherited BeforeDestruction;
+end;
 
 constructor TJvBandForm.Create(AOwner: TComponent);
 begin
@@ -350,8 +371,7 @@ begin
   if Assigned(FOnGetMinSize) then
     Result := FOnGetMinSize(Self)
   else
-    with Constraints do
-      Result := PointL(MinWidth, MinHeight);
+    Result := PointL(Constraints.MinWidth, Constraints.MinHeight);
 end;
 
 function TJvBandForm.GetMaxSize: TPointL;
@@ -359,9 +379,8 @@ begin
   if Assigned(FOnGetMaxSize) then
     Result := FOnGetMaxSize(Self)
   else
-    with Constraints do
-      Result := PointL(iif(MaxWidth = 0, -1, MaxWidth),
-        iif(MaxHeight = 0, -1, MaxHeight));
+    Result := PointL(iif(Constraints.MaxWidth = 0, -1, Constraints.MaxWidth),
+      iif(Constraints.MaxHeight = 0, -1, Constraints.MaxHeight));
 end;
 
 function TJvBandForm.GetIntegral: TPointL;
@@ -396,13 +415,86 @@ begin
   end;
 end;
 
-{$IFDEF UNITVERSIONING}
+{$IFDEF RTL230_UP}
+function MsgHookProc(nCode: Integer; wParam: WPARAM; lParam: LPARAM): LRESULT; stdcall;
+{$ELSE}
+function MsgHookProc(nCode, wParam, lParam: Integer): Integer; stdcall;
+{$ENDIF RTL230_UP}
+var
+  lOk: Boolean;
+  I: Integer;
+  Msg: PMsg;
+begin
+  try
+    lOk := False;
+    Msg := PMsg(Pointer(lParam));
+    if (((Msg^.message = WM_KEYDOWN) or (Msg^.message = WM_KEYUP)) and
+      ((Msg^.wParam = VK_BACK))) then
+      lOk := True
+    else
+    if Msg^.message = WM_MOUSEMOVE then //Enable Flat effects!
+      Application.HandleMessage;
+    if lOk then
+    begin
+      for I := 0 to GlobalBandForms.Count - 1 do
+        if IsDialogMessage(TJvBandForm(GlobalBandForms.Items[I]).Handle, Msg^) then
+        begin
+          Msg^.message := WM_NULL;
+          Break;
+        end;
+    end;
+  except
+  end;
+  Result := CallNextHookEx(GlobalBandFormMessageHook, nCode, wParam, lParam);
+end;
+
+procedure InstallHook;
+var
+  Installations: TJclBorRADToolInstallations;
+  DelphiVersion: Integer;
+  RunningInIDE: Boolean;
+begin
+  Installations := TJclBorRADToolInstallations.Create;
+  try
+    if CompilerVersion >= 21 then
+      DelphiVersion := Trunc(CompilerVersion - 7)
+    else if CompilerVersion = 18.5 then
+      DelphiVersion := 11
+    else
+      DelphiVersion := Trunc(CompilerVersion - 8);
+
+    RunningInIDE := SameText(ParamStr(0), Installations.DelphiInstallationFromVersion[DelphiVersion].IdeExeFileName);
+  finally
+    Installations.Free;
+  end;
+
+  // Only install hook if not in IDE so as not to introduce glitches in the IDE
+  if not RunningInIDE then
+    GlobalBandFormMessageHook := SetWindowsHookEx(WH_GETMESSAGE, MsgHookProc, HInstance, GetCurrentThreadID);
+end;
+
+procedure UninstallHook;
+begin
+  if GlobalBandFormMessageHook <> 0 then
+  begin
+    UnhookWindowsHookEx(GlobalBandFormMessageHook);
+    GlobalBandFormMessageHook := 0;
+  end;
+end;
+
 initialization
+  {$IFDEF UNITVERSIONING}
   RegisterUnitVersion(HInstance, UnitVersioning);
+  {$ENDIF UNITVERSIONING}
+  GlobalBandForms := TList.Create;
+  InstallHook;
 
 finalization
+  UninstallHook;
+  GlobalBandForms.Free;
+  {$IFDEF UNITVERSIONING}
   UnregisterUnitVersion(HInstance);
-{$ENDIF UNITVERSIONING}
+  {$ENDIF UNITVERSIONING}
 
 end.
 

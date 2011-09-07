@@ -150,6 +150,9 @@ type
 
   TDropDownAlign = (daLeft, daRight, daCenter);
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDBLookupTreeViewCombo = class(TJvDBLookupControl)
   private
     FDataList: TJvTreePopupDataList;
@@ -214,6 +217,7 @@ type
     procedure CloseUp(Accept: Boolean);
     procedure DropDown;
     procedure SetBounds(ALeft, ATop, AWidth, AHeight: Integer); override;
+    function CanFocusEx: Boolean;
     property KeyValue;
     property ListVisible: Boolean read FListVisible;
     property Text: string read FText;
@@ -315,6 +319,9 @@ type
     function GetPopupText: string; override;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDBLookupTreeView = class(TJvDBLookupControl)
   private
     FTree: TJvDBTreeView;
@@ -459,7 +466,7 @@ uses
   Types,  // to allow inline expansion
   {$ENDIF COMPILER10_UP}
   CommCtrl, Graphics, DBConsts,
-  JvThemes;
+  JvThemes, JclSysUtils;
 
 //=== { TJvLookupDataSourceLink } ============================================
 
@@ -683,7 +690,7 @@ function TJvDBLookupControl.LocateKey: Boolean;
 begin
   Result := False;
   try
-    if not VarIsNull(FKeyValue) and
+    if not VarIsNullEmpty(FKeyValue) and
       FListLink.DataSet.Locate(FKeyFieldName, FKeyValue, []) then
       Result := True;
   except
@@ -850,7 +857,7 @@ end;
 
 procedure TJvDBLookupControl.CMGetDataLink(var Msg: TMessage);
 begin
-  Msg.Result := Integer(FDataLink);
+  Msg.Result := LRESULT(FDataLink);
 end;
 
 //=== { TJvDBLookupTreeViewCombo } ===========================================
@@ -938,7 +945,7 @@ begin
   SetRect(R, W, 0, ClientWidth, ClientHeight);
   {added by zelen}
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     if (not FListActive) or (not Enabled) or ReadOnly then
       State := tcDropDownButtonDisabled
@@ -997,18 +1004,25 @@ begin
     FAlignment := taLeftJustify;
   end;
   Invalidate;
-
-
-
-
-
-
 end;
 
 procedure TJvDBLookupTreeViewCombo.ListLinkActiveChanged;
 begin
   inherited ListLinkActiveChanged;
   KeyValueChanged;
+end;
+
+function TJvDBLookupTreeViewCombo.CanFocusEx: Boolean;
+var
+  P: TWinControl;
+begin
+  P := Parent;
+  Result := Visible and Enabled;
+  while Result and (P <> nil) do
+  begin
+    Result := P.Visible and P.Enabled;
+    P := P.Parent;
+  end;
 end;
 
 procedure TJvDBLookupTreeViewCombo.CloseUp(Accept: Boolean);
@@ -1020,7 +1034,8 @@ begin
     if GetCapture <> 0 then
       SendMessage(GetCapture, WM_CANCELMODE, 0, 0);
     ListValue := FDataList.GetValue;
-    SetFocus;
+    if CanFocusEx then
+      SetFocus;
     FDataList.Hide;
 {    SetWindowPos(FDataList.Handle, 0, 0, 0, 0, 0, SWP_NOZORDER or
       SWP_NOMOVE or SWP_NOSIZE or SWP_NOACTIVATE or SWP_HIDEWINDOW); }
@@ -1209,7 +1224,7 @@ begin
       begin
         StopTracking;
         MousePos := PointToSmallPoint(ListPos);
-        SendMessage(FDataList.FTree.Handle, WM_LBUTTONDOWN, 0, LPARAM(MousePos));
+        SendMessage(FDataList.FTree.Handle, WM_LBUTTONDOWN, 0, {$IFDEF RTL230_UP}PointToLParam{$ELSE}LPARAM{$ENDIF RTL230_UP}(MousePos));
         Exit;
       end;
     end;
@@ -1263,7 +1278,7 @@ end;
 
 procedure TJvDBLookupTreeViewCombo.CMGetDataLink(var Msg: TMessage);
 begin
-  Msg.Result := Integer(FDataLink);
+  Msg.Result := LRESULT(FDataLink);
 end;
 
 procedure TJvDBLookupTreeViewCombo.WMCancelMode(var Msg: TMessage);
@@ -1320,7 +1335,6 @@ begin
   FTree.BorderStyle := bsNone;
   FTree.HideSelection := False;
   FTree.TabStop := False;
-//  FTree.OnDblClick := OnDblClick2;
 end;
 
 destructor TJvTreePopupDataList.Destroy;
@@ -1351,7 +1365,6 @@ end;
 
 //=== { TJvPopupTree } =======================================================
 
-{******* from ComCtl98 unit}
   // Jean-Luc Mattei
   // jlucm dott club-internet att fr
 const
@@ -1364,16 +1377,15 @@ const
 
 type
   PNMCustomDrawInfo = ^TNMCustomDrawInfo;
-  TNMCustomDrawInfo = packed record
+  TNMCustomDrawInfo = record
     hdr: TNMHdr;
-    dwDrawStage: Longint;
+    dwDrawStage: DWORD;
     hdc: HDC;
     rc: TRect;
-    dwItemSpec: Longint; // this is control specific, but it's how to specify an item.  valid only with CDDS_ITEM bit set
-    uItemState: Cardinal;
-    lItemlParam: Longint;
+    dwItemSpec: {$IFDEF RTL230_UP}DWORD_PTR{$ELSE}Longint{$ENDIF TRL230_UP}; // this is control specific, but it's how to specify an item.  valid only with CDDS_ITEM bit set
+    uItemState: UINT;
+    lItemlParam: LPARAM;
   end;
-{####### from ComCtl98 unit}
 
 procedure TJvPopupTree.CNNotify(var Msg: TWMNotify);
 begin
@@ -1725,7 +1737,6 @@ begin
   inherited FocusKilled(NextWnd);
 end;
 
-
 {added by zelen}
 {$IFDEF JVCLThemesEnabled}
 
@@ -1735,7 +1746,7 @@ begin
     Exit;
   inherited MouseEnter(Control);
   {Windows XP themes use hot track states, hence we have to update the drop down button.}
-  if ThemeServices.ThemesEnabled and not MouseOver and not (csDesigning in ComponentState) then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and not MouseOver and not (csDesigning in ComponentState) then
     Invalidate;
 end;
 
@@ -1743,7 +1754,7 @@ procedure TJvDBLookupTreeViewCombo.MouseLeave(Control: TControl);
 begin
   if csDesigning in ComponentState then
     Exit;
-  if ThemeServices.ThemesEnabled and MouseOver then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and MouseOver then
     Invalidate;
   inherited MouseLeave(Control);
 end;

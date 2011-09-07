@@ -32,8 +32,8 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  SysUtils, Classes, DB, DBTables, Bde,
-  JvComponentBase, JVCLVer;
+  SysUtils, Classes, DB, DBTables, BDE,
+  JvComponentBase, JVCLVer, JvTypes;
 
 const
   DefaultMacroChar = '%';
@@ -97,7 +97,7 @@ type
 
   TRunQueryMode = (rqOpen, rqExecute, rqExecDirect, rqOpenOrExec);
 
-  TJvQueryThread = class(TThread)
+  TJvQueryThread = class(TJvCustomThread)
   private
     FData: TBDEDataSet;
     FMode: TRunQueryMode;
@@ -193,7 +193,7 @@ const
 implementation
 
 uses
-  RTLConsts, Forms, Consts, BDEConst,
+  RTLConsts, Forms, Consts, bdeconst,
   {$IFNDEF COMPILER12_UP}
   JvJCLUtils,
   {$ENDIF ~COMPILER12_UP}
@@ -666,6 +666,7 @@ begin
   FPrepare := Prepare;
   FreeOnTerminate := True;
   FData.DisableControls;
+  ThreadName := Format('%s: %s',[ClassName, Data.Name]);
 end;
 
 procedure TJvQueryThread.DoTerminate;
@@ -698,6 +699,7 @@ end;
 
 procedure TJvQueryThread.Execute;
 begin
+  NameThread(ThreadName);
   try
     if FPrepare and not (FMode in [rqExecDirect]) then
     begin

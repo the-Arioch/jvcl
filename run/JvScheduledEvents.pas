@@ -144,6 +144,9 @@ type
     procedure PauseAll;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvScheduledEvents = class(TJvCustomScheduledEvents)
   published
     property AppStorage;
@@ -283,7 +286,7 @@ const
 //=== { TScheduleThread } ====================================================
 
 type
-  TScheduleThread = class(TThread)
+  TScheduleThread = class(TJvCustomThread)
   private
     FCritSect: TCriticalSection;
     FEnded: Boolean;
@@ -322,6 +325,7 @@ var
   SysTime: TSystemTime;
   NowStamp: TTimeStamp;
 begin
+  NameThread(ThreadName);
   try
     FEnded := False;
     while not Terminated do
@@ -1034,7 +1038,8 @@ end;
 
 function TJvEventCollectionItem.GetNextFire: TTimeStamp;
 begin
-  if IsNullTimeStamp(FSnoozeFire) or (CompareTimeStamps(FSnoozeFire, FScheduleFire) > 0) then
+  if IsNullTimeStamp(FSnoozeFire) or
+     (not IsNullTimeStamp(FScheduleFire) and (CompareTimeStamps(FSnoozeFire, FScheduleFire) > 0)) then
     Result := FScheduleFire
   else
     Result := FSnoozeFire;
@@ -1047,8 +1052,8 @@ begin
   if State <> sesTriggered then
     Exit; // Ignore this message, something is wrong.
   FActualTriggerTime := DateTimeToTimeStamp(Now);
-  IsSnoozeFire := CompareTimeStamps(FActualTriggerTime, FSnoozeFire) >= 0;
-  if IsSnoozeFire and (CompareTimeStamps(FActualTriggerTime, FScheduleFire) >= 0) then
+  IsSnoozeFire := not IsNullTimeStamp(FSnoozeFire) and (CompareTimeStamps(FActualTriggerTime, FSnoozeFire) >= 0);
+  if IsSnoozeFire and not IsNullTimeStamp(FScheduleFire) and (CompareTimeStamps(FActualTriggerTime, FScheduleFire) >= 0) then
   begin
     { We can't have both, the schedule will win (other possibility: generate two succesive events
       from this method, one as a snooze, the other as a schedule) }

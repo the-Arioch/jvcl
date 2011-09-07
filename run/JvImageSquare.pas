@@ -37,6 +37,9 @@ uses
   JvComponent;
 
 type
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvImageSquare = class(TJvGraphicControl)
   private
     FHiColor: TColor;
@@ -147,6 +150,7 @@ end;
 
 procedure TJvImageSquare.Notification(AComponent: TComponent; Operation: TOperation);
 begin
+  inherited Notification(AComponent, Operation);
   if (AComponent = FImageList) and (Operation = opRemove) then
     FImageList := nil;
 end;
@@ -164,7 +168,7 @@ begin
   end
   else
   {$IFDEF JVCLThemesEnabled}
-  if (FBorderStyle = bsSingle) and ThemeServices.ThemesEnabled then
+  if (FBorderStyle = bsSingle) and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
     DrawThemedBorder(Self)
   else
   {$ENDIF JVCLThemesEnabled}
@@ -192,12 +196,9 @@ begin
   end;
 
   { fill in the rest }
-  with Canvas do
-  begin
-    Brush.Color := FTmpColor;
-    Brush.Style := bsSolid;
-    FillRect(R);
-  end;
+  Canvas.Brush.Color := FTmpColor;
+  Canvas.Brush.Style := bsSolid;
+  Canvas.FillRect(R);
 
   if Assigned(FImageList) then
   begin

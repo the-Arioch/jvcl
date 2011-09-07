@@ -47,9 +47,8 @@ type
   TJvControlActionExecuteEvent = procedure(Sender: TObject; const aOperation: TJvControlActionOperation; const
         aActionControl: TControl) of object;
 
-  TJvControlActionCheckEnabledEvent = procedure(aActionControl : TControl;
-      aControlOperation: TJvControlActionOperation; var aEnabled : Boolean)
-      of object;
+  TJvControlActionCheckEnabledEvent = procedure(aActionControl : TControl; aControlOperation: TJvControlActionOperation;
+      var aEnabled : Boolean) of object;
 
   TJvControlBaseAction = class(TJvActionEngineBaseAction)
   private
@@ -73,15 +72,11 @@ type
     function HandlesTarget(Target: TObject): Boolean; override;
     procedure ExecuteTarget(Target: TObject); override;
     property ActionControl: TControl read GetActionControl write SetActionControl;
-    property ControlOperation: TJvControlActionOperation read FControlOperation
-        write SetControlOperation;
+    property ControlOperation: TJvControlActionOperation read FControlOperation write SetControlOperation;
   published
-    property OnCheckEnabled: TJvControlActionCheckEnabledEvent read FOnCheckEnabled
-        write FOnCheckEnabled;                          
-    property OnExecute: TJvControlActionExecuteEvent read FOnExecute write
-        FOnExecute;
-    property AfterExecute: TJvControlActionExecuteEvent read FAfterExecute write
-        FAfterExecute;
+    property OnCheckEnabled: TJvControlActionCheckEnabledEvent read FOnCheckEnabled write FOnCheckEnabled;
+    property OnExecute: TJvControlActionExecuteEvent read FOnExecute write FOnExecute;
+    property AfterExecute: TJvControlActionExecuteEvent read FAfterExecute write FAfterExecute;
   end;
 
   TJvControlCommonAction = class(TJvControlBaseAction)
@@ -137,6 +132,32 @@ type
   published
   end;
 
+type
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
+  TJvControlActionList = class(TJvActionBaseActionList)
+  //The idea of the Action Classes is to work different type of controls.
+  //
+  //Then we have a list of ActionEngines which have the availability to
+  //validate find for a Component if it is supported or not.
+  //For each new type of controls with specific need of handles a new Engine
+  //must be created and registered. An example for these engines can be found
+  //in "JvDBActionsEngineControlCxGrid.pas".
+  //
+  //When a ActionComponent is assigned the action tries to find the correct
+  //engine based on the component and uses the engine for all further operations.
+  //
+  //There are two ways to assign a ActionComponent:
+  //1. Assigning the component to the action list, then all actions in
+  //   this list (which are based on TJvActionEngineBaseAction class)
+  //   gets the ActionComponent assigned also.
+  //2. Using the active control, like the normal action handling.
+  published
+    property ActionComponent;
+    property OnChangeActionComponent;
+  end;
+
 
 {$IFDEF UNITVERSIONING}
 const
@@ -151,8 +172,7 @@ const
 implementation
 
 uses
-  SysUtils, Grids, TypInfo, StrUtils, Variants,
-  Dialogs, StdCtrls, Clipbrd;
+  SysUtils, Grids, TypInfo, StrUtils, Variants, Dialogs, StdCtrls, Clipbrd;
 
 //=== { TJvControlBaseAction } ==============================================
 
@@ -181,7 +201,7 @@ begin
   else
     if Assigned(ControlEngine) then
       ControlEngine.ExecuteOperation(ControlOperation, ActionControl)
-    else                                                  
+    else
       inherited ExecuteTarget(Target);
 end;
 
@@ -202,11 +222,8 @@ end;
 
 function TJvControlBaseAction.HandlesTarget(Target: TObject): Boolean;
 begin
-  if Target is TWinControl then
-    if TwinControl(Target).Focused then
-      Result := inherited HandlesTarget(Target)
-    else
-      Result := False
+  if (Target is TWinControl) and TWinControl(Target).Focused then
+    Result := inherited HandlesTarget(Target)
   else
     Result := False;
 end;
@@ -221,8 +238,7 @@ begin
   ActionComponent := Value;
 end;
 
-procedure TJvControlBaseAction.SetControlOperation(const Value:
-    TJvControlActionOperation);
+procedure TJvControlBaseAction.SetControlOperation(const Value: TJvControlActionOperation);
 begin
   if FControlOperation <> Value then
   begin
@@ -233,6 +249,7 @@ end;
 
 procedure TJvControlBaseAction.UpdateTarget(Target: TObject);
 begin
+  Inherited UpdateTarget(Target);
   if Assigned(ControlEngine) then
     SetEnabled(True)
   else
@@ -280,7 +297,6 @@ begin
   inherited Create(AOwner);
   ControlOperation := caoCustomize;
 end;
-
 
 
 initialization

@@ -129,7 +129,7 @@ type
     FOnCustomValidate: TJvCustomTextValidateEvent;
     FOnValueChanged: TNotifyEvent;
     FZeroEmpty: Boolean;
-    EnterText: string;
+    FEnterText: string;
     FDisplayPrefix: string;
     FDisplaySuffix: string;
     FCriticalPoints: TJvValidateEditCriticalPoints;
@@ -248,6 +248,9 @@ type
     property ForceDecimalSeparatorInput: Boolean read FForceDecimalSeparatorInput write FForceDecimalSeparatorInput;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvValidateEdit = class(TJvCustomValidateEdit)
   published
     property AllowEmpty default False;
@@ -349,7 +352,7 @@ implementation
 uses
   Math,
   VarUtils, Variants,
-  JclStrings, JvJCLUtils, JvResources;
+  JclStrings, JvJCLUtils, JvResources, JclSysUtils;
 
 function IsGreater(Value, MaxValue: Double; MaxValueIncluded: Boolean): Boolean;
 begin
@@ -450,7 +453,7 @@ begin
   FCheckChars := '01234567890';
   Alignment := taRightJustify;
   FEditText := '';
-  Text := '';
+  Text := ''; // doesn't trigger OnChange because FEnterText = ''. That's what we want.
   AutoSize := True;
   FMinValue := 0;
   FMaxValue := 0;
@@ -463,7 +466,7 @@ begin
 
   MappedDecimal := MapVirtualKey(VK_DECIMAL, MAPVK_VK_TO_CHAR);
   if MappedDecimal <> 0 then
-    FForceDecimalSeparatorInput := Char(MappedDecimal) <> {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator;
+    FForceDecimalSeparatorInput := Char(MappedDecimal) <> JclFormatSettings.DecimalSeparator;
 end;
 
 destructor TJvCustomValidateEdit.Destroy;
@@ -495,7 +498,6 @@ end;
 
 procedure TJvCustomValidateEdit.Loaded;
 begin
-  inherited Loaded;
   // (obones) Why is this necessary? It overrides DecimalPlaces set to 0 by the user
 {  if DisplayFormat = dfCurrency then
     if FDecimalPlaces = 0 then
@@ -506,6 +508,7 @@ begin
   finally
     DataConnector.Active := True;
   end;
+  inherited Loaded;
 end;
 
 function TJvCustomValidateEdit.CreateDataConnector: TJvFieldDataConnector;
@@ -602,7 +605,7 @@ begin
             Alignment := taRightJustify;
           if not (csLoading in ComponentState) then
             if FDecimalPlaces = 0 then
-              FDecimalPlaces := {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}CurrencyDecimals;
+              FDecimalPlaces := JclFormatSettings.CurrencyDecimals;
         end;
       dfBinary, dfFloat, dfFloatGeneral, dfPercent, dfDecimal, dfHex,
       dfInteger, dfOctal, dfScientific, dfFloatFixed:
@@ -810,14 +813,17 @@ end;
 
 procedure TJvCustomValidateEdit.SetValue(NewValue: Variant);
 begin
-  case FDisplayFormat of
-    dfAlphabetic, dfAlphaNumeric, dfCheckChars, dfNonCheckChars, dfIdentifier, dfNone, dfCustom:
-      EditText := NewValue;
-    dfBinary, dfHex, dfInteger, dfOctal, dfYear:
-      SetAsInteger(NewValue);
-    dfCurrency, dfFloat, dfDecimal, dfFloatGeneral, dfPercent, dfScientific, dfFloatFixed:
-      SetAsFloat(NewValue);
-  end;
+  if AllowEmpty and (VarIsNull(NewValue) or VarIsEmpty(NewValue)) then
+    Clear
+  else
+    case FDisplayFormat of
+      dfAlphabetic, dfAlphaNumeric, dfCheckChars, dfNonCheckChars, dfIdentifier, dfNone, dfCustom:
+        EditText := NewValue;
+      dfBinary, dfHex, dfInteger, dfOctal, dfYear:
+        SetAsInteger(NewValue);
+      dfCurrency, dfFloat, dfDecimal, dfFloatGeneral, dfPercent, dfScientific, dfFloatFixed:
+        SetAsFloat(NewValue);
+    end;
 end;
 
 procedure TJvCustomValidateEdit.SetCheckChars(const NewValue: string);
@@ -901,7 +907,7 @@ begin
         FCheckChars := '';
     dfCurrency,
     dfFloat, dfFloatGeneral, dfPercent, dfDecimal, dfFloatFixed:
-      FCheckChars := Numbers + {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator;
+      FCheckChars := Numbers + JclFormatSettings.DecimalSeparator;
     dfHex:
       FCheckChars := Numbers + 'ABCDEFabcdef';
     dfInteger, dfYear:
@@ -909,7 +915,7 @@ begin
     dfOctal:
       FCheckChars := '01234567';
     dfScientific:
-      FCheckChars := Numbers + 'Ee' + {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator;
+      FCheckChars := Numbers + 'Ee' + JclFormatSettings.DecimalSeparator;
   end;
 end;
 
@@ -921,7 +927,7 @@ var
   ExpectedNegChar: Char;
 begin
   if (FLastDownKey = VK_DECIMAL) and ForceDecimalSeparatorInput then
-    Key := {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator;
+    Key := JclFormatSettings.DecimalSeparator;
 
   case FDisplayFormat of
     dfBinary, dfCheckChars, dfHex, dfOctal, dfYear:
@@ -938,7 +944,7 @@ begin
         ((Key = '-') and (Posn = 1) and ((Pos('-', S) = 0) or (SelLength > 0)));
     dfFloat, dfFloatGeneral, dfDecimal, dfPercent, dfFloatFixed:
       Result := ((Pos(Key, FCheckChars) > 0) and 
-        (((Key = {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator) and (Pos({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator, S) = 0)) or (Key <> {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator))) or
+        (((Key = JclFormatSettings.DecimalSeparator) and (Pos(JclFormatSettings.DecimalSeparator, S) = 0)) or (Key <> JclFormatSettings.DecimalSeparator))) or
         ((Key = '+') and (Posn = 1) and ((Pos('+', S) = 0) or (SelLength > 0))) or
         ((Key = '-') and (Posn = 1) and ((Pos('-', S) = 0) or (SelLength > 0)));
     dfCurrency:
@@ -955,7 +961,7 @@ begin
         // of the control.
         ExpectedNegChar := '-';
         ExpectedNegPos := 1;
-        case {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}NegCurrFormat of
+        case JclFormatSettings.NegCurrFormat of
           0, 4, 14, 15:
             begin
               ExpectedNegPos := 1;
@@ -975,11 +981,11 @@ begin
             ExpectedNegPos := Length(S) - 2;
         end;
 
-        if (Key = '(') and (Posn = 1) and ({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}NegCurrFormat in [0, 4, 14, 15]) then
+        if (Key = '(') and (Posn = 1) and (JclFormatSettings.NegCurrFormat in [0, 4, 14, 15]) then
           Key := '-';
 
         Result := ((Pos(Key, FCheckChars) > 0) and 
-          (((Key = {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator) and (Pos({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator, S) = 0)) or (Key <> {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator))) or
+          (((Key = JclFormatSettings.DecimalSeparator) and (Pos(JclFormatSettings.DecimalSeparator, S) = 0)) or (Key <> JclFormatSettings.DecimalSeparator))) or
           ((Key = '+') and (Posn = 1) and ((Pos('+', S) = 0) or (SelLength > 0))) or
           ((Key = '-') and (Posn = ExpectedNegPos) and ((Pos(ExpectedNegChar, S) = 0) or (SelLength > 0)));
       end;
@@ -993,12 +999,12 @@ begin
         if Result then
         begin
           iPosE := Pos('e', LowerCase(S));
-          if Key = {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator then
+          if Key = JclFormatSettings.DecimalSeparator then
           begin
             if iPosE = 0 then
-              Result := (Pos({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator, S) = 0)
+              Result := (Pos(JclFormatSettings.DecimalSeparator, S) = 0)
             else
-              Result := ((Posn <= iPosE) and (Pos({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator, Copy(S, 1, iPosE - 1)) = 0));
+              Result := ((Posn <= iPosE) and (Pos(JclFormatSettings.DecimalSeparator, Copy(S, 1, iPosE - 1)) = 0));
                //or ((Posn > iPosE) and (Pos(DecimalSeparator, Copy(S, iPosE + 1, Length(S))) = 0));
                // (outchy) XXXeY,YY are not valid scientific numbers, Y must be an integer value
           end
@@ -1040,7 +1046,7 @@ begin
   if Key = VK_ESCAPE then
   begin
     Key := 0;
-    EditText := EnterText;
+    EditText := FEnterText;
     SelStart := 0;
     SelLength := Length(FEditText);
   end;
@@ -1086,16 +1092,16 @@ function TJvCustomValidateEdit.GetUnprefixedUnsuffixedText(
   const Value: string): string;
 begin
   Result := StrEnsureNoPrefix(DisplayPrefix, StrEnsureNoSuffix(DisplaySuffix, Value));
-  Result := StrEnsureNoPrefix({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}CurrencyString, StrEnsureNoSuffix({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}CurrencyString, Result));
+  Result := StrEnsureNoPrefix(JclFormatSettings.CurrencyString, StrEnsureNoSuffix(JclFormatSettings.CurrencyString, Result));
 end;
 
 procedure TJvCustomValidateEdit.SetEditText(const NewValue: string);
 begin
   FEditText := MakeValid(GetUnprefixedUnsuffixedText(NewValue));
   if (FDisplayFormat = dfYear) and ((not FHasMaxValue) or
-    (FHasMaxValue and (FMaxValue > 2000 + {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}TwoDigitYearCenturyWindow))) and
+    (FHasMaxValue and (FMaxValue > 2000 + JclFormatSettings.TwoDigitYearCenturyWindow))) and
     ((MaxLength = 0) or (MaxLength > 3)) then
-    FEditText := IntToStr(MakeYear4Digit(StrToIntDef(FEditText, 0), {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}TwoDigitYearCenturyWindow));
+    FEditText := IntToStr(MakeYear4Digit(StrToIntDef(FEditText, 0), JclFormatSettings.TwoDigitYearCenturyWindow));
   if (FDisplayFormat in [dfBinary, dfCurrency, dfFloat, dfFloatGeneral, dfDecimal, dfHex, dfInteger,
     dfOctal, dfPercent, dfScientific, dfYear, dfFloatFixed]) then
   begin
@@ -1146,7 +1152,7 @@ begin
         Exponent := '';
         I := Length(NewValue);
       end;
-      Ps := Pos({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator, NewValue);
+      Ps := Pos(JclFormatSettings.DecimalSeparator, NewValue);
       if Ps > 0 then
       begin
         while (I > Ps) and (NewValue[I] = '0') do
@@ -1257,10 +1263,10 @@ end;
 procedure TJvCustomValidateEdit.DoValueChanged;
 begin
   try
-    if Assigned(FOnValueChanged) and (EnterText <> FEditText) then
+    if Assigned(FOnValueChanged) and not (csLoading in ComponentState) and (FEnterText <> FEditText) then
       FOnValueChanged(Self);
   finally
-    EnterText := FEditText;
+    FEnterText := FEditText;
   end;
 end;
 

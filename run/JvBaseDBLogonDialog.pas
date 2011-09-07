@@ -928,7 +928,18 @@ begin
     Connection := ConnectionList.Connection[i];
     GroupList := TStringList.Create;
     try
-      GroupList.CommaText := Connection.Group;
+      {$IFDEF DELPHI2009_UP}    
+      GroupList.StrictDelimiter:=true;
+      {$ENDIF DELPHI2009_UP}
+      GroupList.Duplicates := dupIgnore;
+      GroupList.Sorted := True;
+      if (Pos(';',Connection.Group) >= 1) and (Pos(',',Connection.Group) < 1)then
+        GroupList.Delimiter := ';'
+      else
+        GroupList.Delimiter := ',';
+      GroupList.DelimitedText := Connection.Group;
+      GroupList.Delimiter := ',';
+      Connection.Group := GroupList.CommaText;
       if GroupList.CommaText = '' then
         GroupList.CommaText := RsGroupNameUndefined;
 
@@ -1517,7 +1528,7 @@ begin
       TmpConnectionList.LoadProperties;
       if TmpConnectionList.Count <= 0 then
       begin
-        JVDsaDialogs.MessageDlg(RsNoConnectionEntriesFound, mtError, [mbok], 0, dckScreen,
+        JvDSADialogs.MessageDlg(RsNoConnectionEntriesFound, mtError, [mbok], 0, dckScreen,
           0, mbDefault, mbDefault, mbDefault, DynControlEngine);
         exit;
       end;
@@ -1530,7 +1541,7 @@ begin
         Results[0] := Integer(mrYes);
         Results[1] := Integer(mrNo);
         Results[2] := Integer(mrCancel);
-        case JVDsaDialogs.MessageDlgEx(RsConnectionListImportAppendOverwriteExistingEntries,
+        case JvDSADialogs.MessageDlgEx(RsConnectionListImportAppendOverwriteExistingEntries,
           mtConfirmation, Buttons, Results, 0, dckScreen, 0,
           0, 2, -1, DynControlEngine) of
           mrYes:

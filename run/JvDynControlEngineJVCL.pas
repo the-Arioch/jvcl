@@ -38,7 +38,7 @@ uses
   Buttons, Dialogs, FileCtrl,
   JvMaskEdit, JvDateTimePicker, JvBitBtn, JvCheckBox, JvBaseEdits,
   JvLabel, JvListBox, JvMemo, JvRichEdit, JvPanel, JvRadioGroup, JvToolEdit,
-  JvScrollBox, JvStaticText, JvComboBox, JvImage, JvSpin, JvCheckListBox,
+  JvScrollBox, JvStaticText, JvCombobox, JvImage, JvSpin, JvCheckListBox,
   JvDynControlEngine, JvDynControlEngineIntf, JvGroupBox, JvComCtrls,
   JvProgressBar;
 
@@ -755,6 +755,7 @@ type
     procedure ControlSetDefaultProperties;
     procedure ControlSetHint(const Value: string);
     //IJvDynControlProgressBar
+    procedure ControlSetMarquee(Value: Boolean);
     procedure ControlSetMax(Value: Integer);
     procedure ControlSetMin(Value: Integer);
     procedure ControlSetOnClick(Value: TNotifyEvent);
@@ -913,7 +914,7 @@ end;
 
 procedure TJvDynControlJVCLMaskEdit.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlJVCLMaskEdit.ControlGetValue: Variant;
@@ -1003,7 +1004,7 @@ end;
 
 procedure TJvDynControlJVCLButtonEdit.ControlSetValue(Value: Variant);
 begin
-  FEditControl.Text := Value;
+  FEditControl.Text := VarToStr(Value);
 end;
 
 function TJvDynControlJVCLButtonEdit.ControlGetValue: Variant;
@@ -1105,7 +1106,7 @@ end;
 
 procedure TJvDynControlJVCLCalcEdit.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlJVCLCalcEdit.ControlGetValue: Variant;
@@ -1161,7 +1162,7 @@ end;
 
 procedure TJvDynControlJVCLSpinEdit.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlJVCLSpinEdit.ControlGetValue: Variant;
@@ -1247,7 +1248,7 @@ end;
 
 procedure TJvDynControlJVCLFileNameEdit.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlJVCLFileNameEdit.ControlGetValue: Variant;
@@ -1347,7 +1348,7 @@ end;
 
 procedure TJvDynControlJVCLDirectoryEdit.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlJVCLDirectoryEdit.ControlGetValue: Variant;
@@ -1761,7 +1762,7 @@ end;
 
 procedure TJvDynControlJVCLMemo.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlJVCLMemo.ControlGetValue: Variant;
@@ -1866,7 +1867,7 @@ end;
 
 procedure TJvDynControlJVCLRichEdit.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlJVCLRichEdit.ControlGetValue: Variant;
@@ -2340,7 +2341,7 @@ begin
   if (Style = csDropDownList) and VarIsInt(Value) then
     ItemIndex := Items.IndexOf(Value)
   else
-    Text := Value;
+    Text := VarToStr(Value);
 end;
 
 function TJvDynControlJVCLComboBox.ControlGetValue: Variant;
@@ -3213,6 +3214,16 @@ begin
   Anchors := Value;
 end;
 
+procedure TJvDynControlJVCLProgressBar.ControlSetMarquee(Value: Boolean);
+begin
+  {$IFDEF DELPHI2009_UP}
+  if Value then
+    Style := pbstMarquee
+  else
+    Style := pbstNormal;
+  {$ENDIF DELPHI2009_UP}
+end;
+
 procedure TJvDynControlJVCLProgressbar.ControlSetMax(Value: Integer);
 begin
   Max := Value;
@@ -3513,7 +3524,7 @@ end;
 
 procedure TJvDynControlJVCLCheckedComboBox.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlJVCLCheckedComboBox.ControlGetValue: Variant;

@@ -106,6 +106,8 @@ type
   {$ENDIF DELPHI10_UP}
   {$ENDIF BCB}
 
+  TJvDBGridColumnResize = (gcrNone, gcrGrid, gcrDataSet);
+
   TSelectColumn = (scDataBase, scGrid);
   TTitleClickEvent = procedure(Sender: TObject; ACol: Longint;
     Field: TField) of object;
@@ -211,6 +213,9 @@ type
     ColMoving: Boolean; // currently moving a column
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDBGrid = class(TJvExDBGrid, IJvDataControl)
   private
     FAutoSort: Boolean;
@@ -266,8 +271,11 @@ type
     FShowCellHint: Boolean;
     FOnShowCellHint: TJvCellHintEvent;
     FCharList: TCharList;
+    {$IFDEF COMPILER9_UP}
     FScrollBars: TScrollStyle;
+    {$ENDIF COMPILER9_UP}
     FWordWrap: Boolean;
+    FWordWrapAllFields: Boolean;
     FChangeLinks: TObjectList;
     FShowMemos: Boolean;
     FOnShowEditor: TJvDBEditShowEvent;
@@ -288,8 +296,18 @@ type
     FTitleRowHeight: Integer;
     FCanDelete: Boolean;
 
+    { Cancel edited record on mouse wheel or when resize column (double-click)}
+    FCancelOnMouse: Boolean;
+
+    { Resize column using mouse double clicking }
+    FCanResizeColumn: Boolean;
+    FResizeColumnIndex: Longint;
+    FColumnResize: TJvDBGridColumnResize;
+
     // XP Theming
+    {$IFNDEF COMPILER14_UP}
     FUseXPThemes: Boolean;
+    {$ENDIF ~COMPILER14_UP}
     FPaintInfo: TJvGridPaintInfo;
     FCell: TGridCoord; // currently selected cell
 
@@ -336,7 +354,7 @@ type
     function GetOptions: TDBGridOptions;
     procedure SetOptions(Value: TDBGridOptions);
     function GetMasterColumn(ACol, ARow: Longint): TColumn;
-    function GetTitleOffset: Byte;
+    function GetTitleOffset: Integer;
     procedure SetFixedCols(Value: Integer);
     function GetFixedCols: Integer;
     function CalcLeftColumn: Integer;
@@ -345,7 +363,6 @@ type
     procedure WMRButtonUp(var Msg: TWMMouse); message WM_RBUTTONUP;
     procedure CMHintShow(var Msg: TCMHintShow); message CM_HINTSHOW;
     procedure SetTitleArrow(const Value: Boolean);
-    procedure ShowSelectColumnClick;
     procedure SetAlternateRowColor(const Value: TColor);
     procedure ReadAlternateRowColor(Reader: TReader);
     procedure SetAlternateRowFontColor(const Value: TColor);
@@ -360,7 +377,9 @@ type
     procedure WMVScroll(var Msg: TWMVScroll); message WM_VSCROLL;
     procedure SetShowMemos(const Value: Boolean);
     procedure SetBooleanEditor(const Value: Boolean);
-    procedure SetScrollBars(const Value: TScrollStyle);
+    {$IFDEF COMPILER9_UP}
+    procedure SetScrollBars(Value: TScrollStyle);
+    {$ENDIF COMPILER9_UP}
     procedure ReadPostOnEnter(Reader: TReader);
 
     procedure SetControls(Value: TJvDBGridControls);
@@ -370,14 +389,22 @@ type
     function EditWithBoolBox(Field: TField): Boolean; {$IFDEF DELPHI9} inline; {$ENDIF DELPHI9}
     function DoKeyPress(var Msg: TWMChar): Boolean;
     procedure SetWordWrap(Value: Boolean);
+    procedure SetWordWrapAllFields(Value: Boolean);
     procedure NotifyLayoutChange(const Kind: TJvDBGridLayoutChangeKind);
 
     // XP Theming
+    function GetUseXPThemes: Boolean;
     procedure SetUseXPThemes(Value: Boolean);
+    {$IFNDEF COMPILER14_UP}
     {$IFDEF JVCLThemesEnabled}
     function ColumnOffset: Integer; // col offset used for calculations. Is 1 if indicator is being displayed
     function ValidCell(ACell: TGridCoord): Boolean;
     {$ENDIF JVCLThemesEnabled}
+    {$ENDIF ~COMPILER14_UP}
+
+    function GetMaxDisplayText: string;
+    function GetColumnMaxWidth: Integer;
+
   protected
     FCurrentDrawRow: Integer;
     procedure MouseLeave(Control: TControl); override;
@@ -387,6 +414,7 @@ type
     function CreateEditor: TInplaceEdit; override;
     procedure DblClick; override;
     function DoTitleBtnDblClick: Boolean; dynamic;
+    procedure ShowSelectColumnClick; dynamic;
 
     procedure DoTitleClick(ACol: Longint; AField: TField); dynamic;
     procedure CheckTitleButton(ACol, ARow: Longint; var Enabled: Boolean); dynamic;
@@ -404,7 +432,7 @@ type
     function AllowTitleClick: Boolean; virtual;
 
     procedure EditChanged(Sender: TObject); dynamic;
-    procedure GetCellProps(Field: TField; AFont: TFont; var Background: TColor;
+    procedure GetCellProps(Column: TColumn; AFont: TFont; var Background: TColor;
       Highlight: Boolean); dynamic;
     function HighlightCell(DataCol, DataRow: Integer; const Value: string;
       AState: TGridDrawState): Boolean; override;
@@ -417,13 +445,17 @@ type
     function DoMouseWheelDown(Shift: TShiftState; MousePos: TPoint): Boolean; override;
     function DoMouseWheelUp(Shift: TShiftState; MousePos: TPoint): Boolean; override;
     procedure Scroll(Distance: Integer); override;
+    procedure LinkActive(Value: Boolean); override;
+    {$IFDEF COMPILER9_UP}
+    procedure UpdateScrollBar; override;
+    {$ENDIF COMPILER9_UP}
     procedure LayoutChanged; override;
     procedure TopLeftChanged; override;
     procedure GridInvalidateRow(Row: Longint);
     procedure DrawColumnCell(const Rect: TRect; DataCol: Integer;
       Column: TColumn; State: TGridDrawState); override;
     procedure ColWidthsChanged; override;
-    function DoEraseBackground(Canvas: TCanvas; Param: Integer): Boolean; override;
+    function DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean; override;
     procedure Paint; override;
     procedure CalcSizingState(X, Y: Integer; var State: TGridState;
       var Index: Longint; var SizingPos, SizingOfs: Integer;
@@ -456,6 +488,8 @@ type
     procedure RowHeightsChanged; override;
     function GetDataLink: TDataLink; virtual;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
+
+    procedure CreateParams(var Params: TCreateParams); override;
   public
     {$IFDEF SUPPORTS_CLASS_CTORDTORS}
     class destructor Destroy;
@@ -501,9 +535,8 @@ type
     property VisibleRowCount;
     property VisibleColCount;
     property IndicatorOffset;
-    property TitleOffset: Byte read GetTitleOffset;
+    property TitleOffset: Integer read GetTitleOffset;
     property CharList: TCharList read FCharList write FCharList;
-    property ScrollBars: TScrollStyle read FScrollBars write SetScrollBars;
   published
     property AutoAppend: Boolean read FAutoAppend write FAutoAppend default True;
     property SortMarker: TSortMarker read FSortMarker write SetSortMarker default smNone;
@@ -542,6 +575,9 @@ type
     property AlternateRowColor: TColor read FAlternateRowColor write SetAlternateRowColor default clNone;
     property AlternateRowFontColor: TColor read FAlternateRowFontColor write SetAlternateRowFontColor default clNone;
     property PostOnEnterKey: Boolean read FPostOnEnterKey write FPostOnEnterKey default False;
+    {$IFDEF COMPILER9_UP}
+    property ScrollBars: TScrollStyle read FScrollBars write SetScrollBars default ssBoth;
+    {$ENDIF COMPILER9_UP}
     property SelectColumn: TSelectColumn read FSelectColumn write FSelectColumn default scDataBase;
     property SortedField: string read FSortedField write SetSortedField;
     property ShowTitleHint: Boolean read FShowTitleHint write FShowTitleHint default False;
@@ -561,6 +597,11 @@ type
     { Allows user to delete things using the "del" key }
     property CanDelete: Boolean read FCanDelete write FCanDelete default True;
 
+    { CancelOnMouse: cancel current record when using mouse wheel or on column resizing using double-click }
+    property CancelOnMouse: Boolean read FCancelOnMouse write FCancelOnMouse default False;
+    { ColumnResize: columns can be resized on max Field.DisplayText using mouse double clicking }
+    property ColumnResize: TJvDBGridColumnResize read FColumnResize write FColumnResize default gcrGrid;
+
     { EditControls: list of controls used to edit data }
     property EditControls: TJvDBGridControls read FControls write SetControls;
     { AutoSizeRows: are rows resized automatically ? }
@@ -575,12 +616,14 @@ type
     property TitleRowHeight: Integer read FTitleRowHeight write SetTitleRowHeight;
     { WordWrap: if true, titles, memo and string fields are displayed on several lines }
     property WordWrap: Boolean read FWordWrap write SetWordWrap default False;
+    { WordWrapAllFields: if true and WordWrap is true, not only memo and string fields are displayed on several lines }
+    property WordWrapAllFields: Boolean read FWordWrapAllFields write SetWordWrapAllFields default False;
     { ShowMemos: if true, memo fields are shown as text }
     property ShowMemos: Boolean read FShowMemos write SetShowMemos default True;
     { BooleanEditor: if true, a checkbox is used to edit boolean fields }
     property BooleanEditor: Boolean read FBooleanEditor write SetBooleanEditor default True;
     { UseXPThemes: if true, the grid is painted in the active XP theme style }
-    property UseXPThemes: Boolean read FUseXPThemes write SetUseXPThemes default True;
+    property UseXPThemes: Boolean read GetUseXPThemes write SetUseXPThemes {$IFDEF COMPILER14_UP} stored False{$ENDIF} default True;
     { OnCheckIfBooleanField: event used to treat integer fields and string fields as boolean fields }
     property OnCheckIfBooleanField: TJvDBCheckIfBooleanFieldEvent read FOnCheckIfBooleanField write FOnCheckIfBooleanField;
     { OnColumnResized: event triggered each time a column is resized with the mouse }
@@ -612,14 +655,13 @@ const
 implementation
 
 uses
-  Variants, SysUtils, Math, TypInfo, Dialogs, DBConsts,
-  StrUtils,
+  Variants, SysUtils, Math, TypInfo, Dialogs, DBConsts, StrUtils,
   JvDBLookup,
   JvConsts, JvResources, JvThemes, JvJCLUtils, JvJVCLUtils,
   {$IFDEF COMPILER7_UP}
   GraphUtil, // => TScrollDirection, DrawArray(must be after JvJVCLUtils)
   {$ENDIF COMPILER7_UP}
-  JvAppStoragePropertyEngineDB, JvDBGridSelectColumnForm;
+  JvAppStoragePropertyEngineDB, JvDBGridSelectColumnForm, JclSysUtils;
 
 {$R JvDBGrid.res}
 
@@ -630,6 +672,8 @@ type
   {$IFNDEF COMPILER7_UP}
   TScrollDirection = (sdLeft, sdRight, sdUp, sdDown);
   {$ENDIF ~COMPILER7_UP}
+
+  TCustomGridAccess = class(TCustomGrid);
 
 const
   GridBmpNames: array [TGridPicture] of PChar =
@@ -682,39 +726,10 @@ begin
     AlignFlags[Alignment] or RTL[RightToLeft] or Flags);
 end;
 
-{$IFNDEF COMPILER7_UP}
- {$IFDEF JVCLThemesEnabled}
-procedure DrawArrow(ACanvas: TCanvas; Direction: TScrollDirection;
-  Location: TPoint; Size: Integer);
-const
-  ArrowPts: array[TScrollDirection, 0..2] of TPoint =
-    (((X:1; Y:0), (X:0; Y:1), (X:1; Y:2)),
-     ((X:0; Y:0), (X:1; Y:1), (X:0; Y:2)),
-     ((X:0; Y:1), (X:1; Y:0), (X:2; Y:1)),
-     ((X:0; Y:0), (X:1; Y:1), (X:2; Y:0)));
-var
-  I: Integer;
-  Pts: array[0..2] of TPoint;
-  OldWidth: Integer;
-  OldColor: TColor;
+function IsMemoField(AField: TField): Boolean; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
 begin
-  if ACanvas = nil then exit;
-  OldColor := ACanvas.Brush.Color;
-  ACanvas.Brush.Color := ACanvas.Pen.Color;
-  Move(ArrowPts[Direction], Pts, SizeOf(Pts));
-  for I := 0 to 2 do
-    Pts[I] := Point(Pts[I].x * Size + Location.X, Pts[I].y * Size + Location.Y);
-  with ACanvas do
-  begin
-    OldWidth := Pen.Width;
-    Pen.Width := 1;
-    Polygon(Pts);
-    Pen.Width := OldWidth;
-    Brush.Color := OldColor;
-  end;
+  Result := AField.DataType in [ftMemo {$IFDEF COMPILER10_UP}, ftWideMemo {$ENDIF}];
 end;
- {$ENDIF JVCLThemesEnabled}
-{$ENDIF ~COMPILER7_UP}
 
 //=== { TInternalInplaceEdit } ===============================================
 
@@ -923,7 +938,7 @@ begin
   if DataLink.Active and (DataLink.DataSet.State <> dsBrowse) then
     DataLink.DataSet.Cancel;
 
-  // Ideally we would transmit the action to the DatalList but
+  // Ideally we would transmit the action to the DataList but
   // DoMouseWheel is protected
   //  Result := FDataList.DoMouseWheel(Shift, WheelDelta, MousePos);
   Result := inherited DoMouseWheel(Shift, WheelDelta, MousePos);
@@ -1022,6 +1037,9 @@ var
   Bmp: TBitmap;
 begin
   inherited Create(AOwner);
+  {$IFDEF COMPILER9_UP}
+  FScrollBars := ssBoth;
+  {$ENDIF COMPILER9_UP}
 
   // (obones): issue 3026: need to create FChangeLinks at the beginning
   // so that any change can access the object. It seems that on some
@@ -1073,8 +1091,12 @@ begin
 
   FReadOnlyCellColor := clDefault;
 
+  FColumnResize := gcrGrid;
+
   // XP Theming
+  {$IFNDEF COMPILER14_UP}
   FUseXPThemes := True;
+  {$ENDIF ~COMPILER14_UP}
   FPaintInfo.ColPressed := False;
   FPaintInfo.MouseInCol := -1;
   FPaintInfo.ColPressedIdx := -1;
@@ -1105,12 +1127,14 @@ end;
 
 procedure TJvDBGrid.RegisterLayoutChangeLink(Link: TJvDBGridLayoutChangeLink);
 begin
-  FChangeLinks.Add(Link);
+  if not (csDestroying in ComponentState) then
+    FChangeLinks.Add(Link);
 end;
 
 procedure TJvDBGrid.UnregisterLayoutChangeLink(Link: TJvDBGridLayoutChangeLink);
 begin
-  FChangeLinks.Remove(Link);
+  if not (csDestroying in ComponentState) then
+    FChangeLinks.Remove(Link);
 end;
 
 function TJvDBGrid.EditWithBoolBox(Field: TField): Boolean;
@@ -1232,7 +1256,7 @@ end;
 
 procedure TJvDBGrid.SelectAll;
 var
-  ABookmark: TBookmark;
+  LBookmark: TBookmark;
 begin
   if MultiSelect and DataLink.Active then
   begin
@@ -1242,7 +1266,7 @@ begin
         Exit;
       DisableControls;
       try
-        ABookmark := GetBookmark;
+        LBookmark := GetBookmark;
         try
           First;
           while not Eof do
@@ -1252,10 +1276,10 @@ begin
           end;
         finally
           try
-            GotoBookmark(ABookmark);
+            GotoBookmark(LBookmark);
           except
           end;
-          FreeBookmark(ABookmark);
+          FreeBookmark(LBookmark);
         end;
       finally
         EnableControls;
@@ -1377,7 +1401,7 @@ begin
   TInternalInplaceEdit(Result).OnChange := EditChanged;
 end;
 
-function TJvDBGrid.GetTitleOffset: Byte;
+function TJvDBGrid.GetTitleOffset: Integer;
 var
   I, J: Integer;
 begin
@@ -1385,8 +1409,7 @@ begin
   if dgTitles in Options then
   begin
     Result := 1;
-    if (DataLink <> nil) and (DataLink.DataSet <> nil) and
-      DataLink.DataSet.ObjectView then
+    if (DataLink <> nil) and (DataLink.DataSet <> nil) and DataLink.DataSet.ObjectView then
       for I := 0 to Columns.Count - 1 do
       begin
         if Columns[I].Showing then
@@ -1782,7 +1805,7 @@ begin
   SetMultiSelect(dgMultiSelect in Value);
 end;
 
-function TJvDBGrid.DoEraseBackground(Canvas: TCanvas; Param: Integer): Boolean;
+function TJvDBGrid.DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean;
 var
   R: TRect;
   Size: TSize;
@@ -1804,6 +1827,7 @@ procedure TJvDBGrid.Paint;
 begin
   if Assigned(FOnBeforePaint) then
     FOnBeforePaint(Self);
+  {$IFNDEF COMPILER14_UP}
   {$IFDEF JVCLThemesEnabled}
   if UseXPThemes and ThemeServices.ThemesEnabled then
   begin
@@ -1812,6 +1836,7 @@ begin
     TStringGrid(Self).Options := TStringGrid(Self).Options - [goFixedVertLine, goFixedHorzLine];
   end;
   {$ENDIF JVCLThemesEnabled}
+  {$ENDIF ~COMPILER14_UP}
   inherited Paint;
   if not (csDesigning in ComponentState) and
     (dgRowSelect in Options) and DefaultDrawing and Focused then
@@ -1851,7 +1876,8 @@ end;
 
 procedure TJvDBGrid.SetStorage(Value: TJvFormPlacement);
 begin
-  FIniLink.Storage := Value;
+  if not (csDestroying in ComponentState) then
+    FIniLink.Storage := Value;
 end;
 
 function TJvDBGrid.AcquireFocus: Boolean;
@@ -1979,8 +2005,9 @@ begin
   end
   else
   begin
-    if not (Assigned(InplaceEditor) and InplaceEditor.Visible) then
-      HideEditor;
+    if not FAlwaysShowEditor or ([dgRowSelect, dgEditing] * Options <> [dgEditing]) then
+      if HandleAllocated and not (Assigned(InplaceEditor) and InplaceEditor.Visible) then
+        HideEditor;
   end;
 end;
 
@@ -1991,20 +2018,12 @@ begin
     FOnCanEditCell(Self, AField, Result);
 end;
 
-procedure TJvDBGrid.GetCellProps(Field: TField; AFont: TFont;
+procedure TJvDBGrid.GetCellProps(Column: TColumn; AFont: TFont;
   var Background: TColor; Highlight: Boolean);
 
   function IsAfterFixedCols: Boolean;
-  var
-    I: Integer;
   begin
-    Result := True;
-    for I := 0 to FixedCols - 1 do
-      if Assigned(Field) and Assigned(Columns.Items[I]) and (Columns.Items[I].FieldName = Field.FieldName) then
-      begin
-        Result := False;
-        Break;
-      end;
+    Result := Column.Index >= FixedCols;
   end;
 
 begin
@@ -2013,9 +2032,17 @@ begin
     if Odd(FCurrentDrawRow + FixedRows) then
     begin
       if (FAlternateRowColor <> clNone) and (FAlternateRowColor <> Color) then
-        Background := AlternateRowColor;
+      begin
+        // Prefer the column's color
+        if not ((cvColor in Column.AssignedValues) and (Column.Color <> Column.DefaultColor)) then
+          Background := AlternateRowColor;
+      end;
       if FAlternateRowFontColor <> clNone then
-        AFont.Color := AlternateRowFontColor;
+      begin
+        // Prefer the column's font.color if it has a prefered color
+        if not ((cvColor in Column.AssignedValues) and (Column.Color <> Column.DefaultColor)) then
+          AFont.Color := AlternateRowFontColor;
+      end;
     end;
   end
   else
@@ -2027,10 +2054,10 @@ begin
     Background := clHighlight;
   end;
   if Assigned(FOnGetCellParams) then
-    FOnGetCellParams(Self, Field, AFont, Background, Highlight)
+    FOnGetCellParams(Self, Column.Field, AFont, Background, Highlight)
   else
   if Assigned(FOnGetCellProps) then
-    FOnGetCellProps(Self, Field, AFont, Background);
+    FOnGetCellProps(Self, Column.Field, AFont, Background);
 end;
 
 procedure TJvDBGrid.DoTitleClick(ACol: Longint; AField: TField);
@@ -2050,7 +2077,6 @@ var
   var
     I: Integer;
     IsDescending: Boolean;
-
   begin
     Result := False;
     for I := 0 to IndexDefs.Count - 1 do
@@ -2170,6 +2196,13 @@ begin
     if ((AlternateRowColor <> clNone) and (AlternateRowColor <> Color)) or
        ((AlternateRowFontColor <> clNone) and (AlternateRowFontColor <> Font.Color)) then
       Invalidate;
+
+    if FAlwaysShowEditor and HandleAllocated and ([dgRowSelect, dgEditing] * Options = [dgEditing]) and
+       Focused then
+    begin
+      ShowEditor;
+      InvalidateCol(Col);
+    end;
   end;
 end;
 
@@ -2233,6 +2266,35 @@ begin
     InvalidateCell(I, Row);
 end;
 
+procedure TJvDBGrid.LinkActive(Value: Boolean);
+begin
+  inherited LinkActive(Value);
+  if Value and FAlwaysShowEditor then
+    ShowEditor;
+end;
+
+{$IFDEF COMPILER9_UP}
+procedure TJvDBGrid.UpdateScrollBar;
+begin
+  if HandleAllocated then
+  begin
+    // The grid can only handle ssNone and ssHorizontal. We have to emulate the other modes.
+    if not (FScrollBars in [ssNone, ssHorizontal]) then
+      inherited UpdateScrollBar;
+    if FScrollBars = ssVertical then
+      ShowScrollBar(Handle, SB_HORZ, False);
+
+    // UpdateScrollBar is the only virtual method that is called from TDBGrid.DataChanged
+    if FAlwaysShowEditor and ([dgRowSelect, dgEditing] * Options = [dgEditing]) and
+       Focused then
+    begin
+      ShowEditor;
+      InvalidateCol(Col);
+    end;
+  end;
+end;
+{$ENDIF COMPILER9_UP}
+
 procedure TJvDBGrid.TopLeftChanged;
 begin
   if (dgRowSelect in Options) and DefaultDrawing then
@@ -2274,8 +2336,7 @@ begin
   end;
 end;
 
-procedure TJvDBGrid.MouseDown(Button: TMouseButton; Shift: TShiftState;
-  X, Y: Integer);
+procedure TJvDBGrid.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 var
   Cell, LastCell: TGridCoord;
   MouseDownEvent: TMouseEvent;
@@ -2284,6 +2345,7 @@ var
   lLastSelected, lNewSelected: {$IFDEF RTL200_UP}TBookmark{$ELSE}TBookmarkStr{$ENDIF RTL200_UP};
   lCompare: Integer;
   WasAlwaysShowEditor: Boolean;
+  WasRowResizing: Boolean;
 begin
   if not AcquireFocus then
     Exit;
@@ -2295,6 +2357,7 @@ begin
   FAcquireFocus := False;
   try
     { XP Theming }
+    {$IFNDEF COMPILER14_UP}
     {$IFDEF JVCLThemesEnabled}
     if not (csDesigning in ComponentState) and UseXPThemes and ThemeServices.ThemesEnabled then
     begin
@@ -2318,6 +2381,7 @@ begin
       end;
     end;
     {$ENDIF JVCLThemesEnabled}
+    {$ENDIF ~COMPILER14_UP}
 
     if Sizing(X, Y) then
       inherited MouseDown(Button, Shift, X, Y)
@@ -2331,8 +2395,11 @@ begin
         (dgTitles in Options) and (dgIndicator in Options) and
         (Cell.Y = 0) then
       begin
-        if (FTitleArrow and Assigned(FOnTitleArrowMenuEvent)) then
+        if (Cell.X = 0) and FTitleArrow and Assigned(FOnTitleArrowMenuEvent) then
+        begin
           FOnTitleArrowMenuEvent(Self);
+          Exit;
+        end;
 
         // Display TitlePopup if it exists
         if Assigned(FTitlePopup) then
@@ -2340,8 +2407,8 @@ begin
           GetCursorPos(CursorPos);
           FTitlePopup.PopupComponent := Self;
           FTitlePopup.Popup(CursorPos.X, CursorPos.Y);
+          Exit;
         end;
-        Exit;
       end;
 
       if (DragKind = dkDock) and (Cell.X < IndicatorOffset) and
@@ -2405,7 +2472,20 @@ begin
             // Does not work if there's no indicator column
             //-------------------------------------------------------------------------------
             if (dgRowSelect in Options) and (Cell.Y >= TitleOffset) then
-              inherited MouseDown(Button, Shift, 1, Y)
+            begin
+              // Why do we always have to work around the VCL. If we use the original X the
+              // Grid will scroll back to the first column. But if we don't use the original X
+              // and goRowSizing is enabled, the user can start resizing rows in the wild.
+              WasRowResizing := goRowSizing in TCustomGridAccess(Self).Options;
+              try
+                // Disable goRowSizing without all the code that SetOptions executes.
+                TGridOptions(Pointer(@TCustomGridAccess(Self).Options)^) := TCustomGridAccess(Self).Options - [goRowSizing];
+                inherited MouseDown(Button, Shift, 1, Y);
+              finally
+                if WasRowResizing then
+                  TGridOptions(Pointer(@TCustomGridAccess(Self).Options)^) := TCustomGridAccess(Self).Options + [goRowSizing];
+              end;
+            end
             else
               inherited MouseDown(Button, Shift, X, Y);
             if (Col = LastCell.X) and (Row <> LastCell.Y) then
@@ -2490,13 +2570,16 @@ begin
 end;
 
 procedure TJvDBGrid.MouseMove(Shift: TShiftState; X, Y: Integer);
+{$IFNDEF COMPILER14_UP}
 {$IFDEF JVCLThemesEnabled}
 var
   Cell: TGridCoord;
   MouseInCol: Integer;
 {$ENDIF JVCLThemesEnabled}
+{$ENDIF ~COMPILER14_UP}
 begin
   { XP Theming }
+  {$IFNDEF COMPILER14_UP}
   {$IFDEF JVCLThemesEnabled}
   if not (csDesigning in ComponentState) and UseXPThemes and ThemeServices.ThemesEnabled then
   begin
@@ -2522,6 +2605,7 @@ begin
     end;
   end;
   {$ENDIF JVCLThemesEnabled}
+  {$ENDIF ~COMPILER14_UP}
 
   if FTracking and not FSwapButtons then
     TrackButton(X, Y);
@@ -2547,7 +2631,7 @@ begin
     begin
       ACol := Cell.X;
       if dgIndicator in Options then
-        Dec(ACol);
+        Dec(ACol, IndicatorOffset);
       if (DataLink <> nil) and DataLink.Active and (ACol >= 0) and
         (ACol < Columns.Count) then
         DoTitleClick(FPressedCol.Index, FPressedCol.Field);
@@ -2589,6 +2673,7 @@ begin
   DoAutoSizeColumns;
 
   { XP Theming }
+  {$IFNDEF COMPILER14_UP}
   {$IFDEF JVCLThemesEnabled}
   if UseXPThemes and ThemeServices.ThemesEnabled then
   begin
@@ -2598,6 +2683,7 @@ begin
     Invalidate;
   end;
   {$ENDIF JVCLThemesEnabled}
+  {$ENDIF ~COMPILER14_UP}
 end;
 
 procedure TJvDBGrid.WMRButtonUp(var Msg: TWMMouse);
@@ -2652,20 +2738,20 @@ begin
     if not DoKeyPress(Msg) then
       case Char(Msg.CharCode) of
         #32:
-        begin
-          ShowEditor;
-          ChangeBoolean(JvGridBool_INVERT);
-        end;
+          begin
+            ShowEditor;
+            ChangeBoolean(JvGridBool_INVERT);
+          end;
         Backspace, '0', '-':
-        begin
-          ShowEditor;
-          ChangeBoolean(JvGridBool_UNCHECK);
-        end;
+          begin
+            ShowEditor;
+            ChangeBoolean(JvGridBool_UNCHECK);
+          end;
         '1', '+':
-        begin
-          ShowEditor;
-          ChangeBoolean(JvGridBool_CHECK);
-        end;
+          begin
+            ShowEditor;
+            ChangeBoolean(JvGridBool_CHECK);
+          end;
       end;
   end
   else
@@ -2752,9 +2838,9 @@ begin
       else
       if FieldKind = fkData then
       begin
-        if DataType in [db.ftFloat{$IFDEF COMPILER12_UP},db.ftExtended{$ENDIF COMPILER12_UP}] then
+        if DataType in [DB.ftFloat{$IFDEF COMPILER12_UP},DB.ftExtended{$ENDIF COMPILER12_UP}] then
           if CharInSet(Key, ['.', ',']) then
-            Key := {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator;
+            Key := JclFormatSettings.DecimalSeparator;
 
         if CharInSet(Key, CharList) and (Columns[SelectedIndex].PickList.Count <> 0) then
         begin
@@ -2845,8 +2931,9 @@ const
   RTL: array [Boolean] of Integer = (0, DT_RTLREADING);
 var
   DrawBitmap: TBitmap;
+  Hold: Integer;
   B, R: TRect;
-  Hold, DrawOptions: Integer;
+  DrawOptions: Integer;
 
   procedure DrawAText(CellCanvas: TCanvas);
   begin
@@ -2858,10 +2945,10 @@ var
       if WordWrap then
         DrawOptions := DrawOptions or DT_WORDBREAK;
       {$IFDEF JVCLThemesEnabled}
-      if not FixCell or not (UseXPThemes and ThemeServices.ThemesEnabled) then
+      if not FixCell or not (UseXPThemes and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP}) then
       {$ENDIF JVCLThemesEnabled}
         {$IFDEF COMPILER14_UP}
-        if not FixCell or (DrawingStyle = gdsClassic) then
+        if not FixCell or (DrawingStyle in [gdsClassic, gdsThemed]) then
         {$ENDIF COMPILER14_UP}
         begin
           if Brush.Style <> bsSolid then
@@ -2874,7 +2961,9 @@ var
   end;
 
 begin
-  if ReduceFlicker {$IFDEF JVCLThemesEnabled} and not (UseXPThemes and ThemeServices.ThemesEnabled) {$ENDIF} then
+  if ReduceFlicker
+     {$IFDEF COMPILER14_UP} and not FixCell {$ENDIF}
+     {$IFDEF JVCLThemesEnabled} and not (UseXPThemes and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP}) {$ENDIF} then
   begin
     // Use offscreen bitmap to eliminate flicker and
     // brush origin tics in painting / scrolling.
@@ -2882,19 +2971,14 @@ begin
     try
       DrawBitmap.Canvas.Lock;
       try
-        with DrawBitmap, ARect do
-        begin
-          Width := Max(Width, Right - Left);
-          Height := Max(Height, Bottom - Top);
-          R := Rect(DX, DY, Right - Left - 1, Bottom - Top - 1);
-          B := Rect(0, 0, Right - Left, Bottom - Top);
-        end;
-        with DrawBitmap.Canvas do
-        begin
-          Font := Canvas.Font;
-          Font.Color := Canvas.Font.Color;
-          Brush := Canvas.Brush;
-        end;
+        DrawBitmap.Width := Max(DrawBitmap.Width, ARect.Right - ARect.Left);
+        DrawBitmap.Height := Max(DrawBitmap.Height, ARect.Bottom - ARect.Top);
+        R := Rect(DX, DY, ARect.Right - ARect.Left - 1, ARect.Bottom - ARect.Top - 1);
+        B := Rect(0, 0, ARect.Right - ARect.Left, ARect.Bottom - ARect.Top);
+        DrawBitmap.Canvas.Font := Canvas.Font;
+        DrawBitmap.Canvas.Font.Color := Canvas.Font.Color;
+        DrawBitmap.Canvas.Brush := Canvas.Brush;
+
         DrawAText(DrawBitmap.Canvas);
         if Canvas.CanvasOrientation = coRightToLeft then
         begin
@@ -2914,11 +2998,9 @@ begin
   begin
     // No offscreen bitmap - The display is faster but flickers
     if IsRightToLeft then
-      with ARect do
-        R := Rect(Left, Top, Right - 1 - DX, Bottom - DY - 1)
+      R := Rect(ARect.Left, ARect.Top, ARect.Right - 1 - DX, ARect.Bottom - DY - 1)
     else
-      with ARect do
-        R := Rect(Left + DX, Top + DY, Right - 1, Bottom - 1);
+      R := Rect(ARect.Left + DX, ARect.Top + DY, ARect.Right - 1, ARect.Bottom - 1);
     B := ARect;
     DrawAText(Canvas);
   end;
@@ -2930,14 +3012,18 @@ begin
 end;
 
 procedure TJvDBGrid.DoDrawCell(ACol, ARow: Longint; ARect: TRect; AState: TGridDrawState);
+{$IFNDEF COMPILER14_UP}
 {$IFDEF JVCLThemesEnabled}
 var
   Details: TThemedElementDetails;
   lCaptionRect: TRect;
   lCellRect: TRect;
-  PenRecall: TPenRecall;
+  Bmp: TBitmap;
+  DC: HDC;
 {$ENDIF JVCLThemesEnabled}
+{$ENDIF ~COMPILER14_UP}
 begin
+  {$IFNDEF COMPILER14_UP}
   {$IFDEF JVCLThemesEnabled}
   if UseXPThemes and ThemeServices.ThemesEnabled then
   begin
@@ -2985,15 +3071,27 @@ begin
       // draw the indicator
       if (Datalink.Active) and (ARow - TitleOffset = Datalink.ActiveRecord) then
       begin
-        PenRecall := TPenRecall.Create(Canvas.Pen);
+        // Unfortunatelly the TDBGrid.FIndicators: TImageList is a private field so we have to
+        // call the original painter for the indicator and draw it into a transparent bitmap
+        // without the 3D border.
+        Bmp := TBitmap.Create;
         try
-          Canvas.Pen.Color := clWhite;
-          { BiDiMode <> bidiLeftToRight is handled by the CanvasOrientation }
-          DrawArrow(Canvas, sdRight, Point(lCellRect.Left + 4, lCellRect.Top + 3), 5);
-          Canvas.Pen.Color := clBlack;
-          DrawArrow(Canvas, sdRight, Point(lCellRect.Left + 3, lCellRect.Top + 3), 5);
+          Bmp.Canvas.Brush.Color := FixedColor;
+          Bmp.Width := lCellRect.Right - lCellRect.Left;
+          Bmp.Height := lCellRect.Bottom - lCellRect.Top;
+          DC := Canvas.Handle;
+          try
+            Canvas.Handle := Bmp.Canvas.Handle;
+            IntersectClipRect(Canvas.Handle, 2, 2, Bmp.Width - 2, Bmp.Height - 2);
+            CallDrawCellEvent(ACol, ARow, Rect(0, 0, Bmp.Width - 1, Bmp.Height - 1), [gdFixed]);
+          finally
+            Canvas.Handle := DC;
+          end;
+          Bmp.TransparentColor := FixedColor;
+          Bmp.Transparent := True;
+          Canvas.Draw(lCellRect.Left, lCellRect.Top, Bmp);
         finally
-          PenRecall.Free;
+          Bmp.Free;
         end;
       end;
     end
@@ -3002,6 +3100,7 @@ begin
   end
   else
   {$ENDIF JVCLThemesEnabled}
+  {$ENDIF ~COMPILER14_UP}
     CallDrawCellEvent(ACol, ARow, ARect, AState);
 end;
 
@@ -3147,8 +3246,7 @@ var
       try
         Canvas.FillRect(ButtonRect);
         InflateRect(ButtonRect, -1, -1);
-        with ButtonRect do
-          IntersectClipRect(Canvas.Handle, Left, Top, Right, Bottom);
+        IntersectClipRect(Canvas.Handle, ButtonRect.Left, ButtonRect.Top, ButtonRect.Right, ButtonRect.Bottom);
         InflateRect(ButtonRect, 1, 1);
         { DrawFrameControl doesn't draw properly when orientation has changed.
           It draws as ExtTextOut does. }
@@ -3175,14 +3273,13 @@ begin
   end;
 
   DoDrawCell(ACol, ARow, ARect, AState);
-  with ARect do
-    if FTitleArrow and (ARow = 0) and (ACol = 0) and
-      (dgIndicator in Options) and (dgTitles in Options) then
-    begin
-      Bmp := GetGridBitmap(gpPopup);
-      DrawBitmapTransparent(Canvas, (ARect.Left + ARect.Right - Bmp.Width) div 2,
-        (ARect.Top + ARect.Bottom - Bmp.Height) div 2, Bmp, clWhite);
-    end;
+  if FTitleArrow and (ARow = 0) and (ACol = 0) and
+    (dgIndicator in Options) and (dgTitles in Options) then
+  begin
+    Bmp := GetGridBitmap(gpPopup);
+    DrawBitmapTransparent(Canvas, (ARect.Left + ARect.Right - Bmp.Width) div 2,
+      (ARect.Top + ARect.Bottom - Bmp.Height) div 2, Bmp, clWhite);
+  end;
 
   InBiDiMode := Canvas.CanvasOrientation = coRightToLeft;
   if (dgIndicator in Options) and (ACol = 0) and (ARow - TitleOffset >= 0) and
@@ -3265,7 +3362,7 @@ begin
       if FTitleButtons or ([dgRowLines, dgColLines] * Options = [dgRowLines, dgColLines]) then
       begin
         {$IFDEF JVCLThemesEnabled}
-        if not (UseXPThemes and ThemeServices.ThemesEnabled) then
+        if not (UseXPThemes and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP}) then
         {$ENDIF JVCLThemesEnabled}
         begin
           DrawEdge(Canvas.Handle, TitleRect, EdgeFlag[Down], BF_BOTTOMRIGHT);
@@ -3302,28 +3399,26 @@ begin
       ARect := TitleRect;
       if (DataLink = nil) or not DataLink.Active then
       begin
-        {$IFDEF JVCLThemesEnabled}
+        {$IFDEF COMPILER14_UP}
+        DrawCellBackground(TitleRect, FixedColor, AState, ACol, ARow - TitleOffset);
+        {$ELSE}
+          {$IFDEF JVCLThemesEnabled}
         if not (UseXPThemes and ThemeServices.ThemesEnabled) then
-        {$ENDIF JVCLThemesEnabled}
-        begin
-          {$IFDEF COMPILER14_UP}
-          DrawCellBackground(TitleRect, FixedColor, AState, ACol, ARow - TitleOffset);
-          {$ELSE}
+          {$ENDIF JVCLThemesEnabled}
           Canvas.FillRect(TitleRect);
-          {$ENDIF COMPILER14_UP}
-        end;
+        {$ENDIF COMPILER14_UP}
       end
       else
       if DrawColumn <> nil then
       begin
-        {$IFDEF JVCLThemesEnabled}
-        if not (UseXPThemes and ThemeServices.ThemesEnabled) then
-        {$ENDIF JVCLThemesEnabled}
-        begin
-          {$IFDEF COMPILER14_UP}
-          DrawCellBackground(TitleRect, FixedColor, AState, ACol, ARow - TitleOffset);
-          {$ENDIF COMPILER14_UP}
-        end;
+        {$IFDEF COMPILER14_UP}
+        DrawCellBackground(TitleRect, FixedColor, AState, ACol, ARow - TitleOffset);
+        {$ELSE}
+//          {$IFDEF JVCLThemesEnabled}
+//        if not (UseXPThemes and ThemeServices.ThemesEnabled) then
+//          {$ENDIF JVCLThemesEnabled}
+//          Canvas.FillRect(TitleRect);
+        {$ENDIF COMPILER14_UP}
         case ASortMarker of
           smDown:
             Bmp := GetGridBitmap(gpMarkDown);
@@ -3356,14 +3451,14 @@ begin
             ALeft := TitleRect.Right - Indicator + 3;
             if IsRightToLeft then
               ALeft := TitleRect.Left + 3;
-            {$IFDEF JVCLThemesEnabled}
+            {$IFDEF COMPILER14_UP}
+            DrawCellBackground(Rect(TextRect.Right, TitleRect.Top, TitleRect.Right, TitleRect.Bottom), FixedColor, AState, ACol, ARow - TitleOffset);
+            {$ELSE}
+              {$IFDEF JVCLThemesEnabled}
             if not (UseXPThemes and ThemeServices.ThemesEnabled) then
-            {$ENDIF JVCLThemesEnabled}
-              {$IFDEF COMPILER14_UP}
-              DrawCellBackground(Rect(TextRect.Right, TitleRect.Top, TitleRect.Right, TitleRect.Bottom), FixedColor, AState, ACol, ARow - TitleOffset);
-              {$ELSE}
+              {$ENDIF JVCLThemesEnabled}
               Canvas.FillRect(Rect(TextRect.Right, TitleRect.Top, TitleRect.Right, TitleRect.Bottom));
-              {$ENDIF COMPILER14_UP}
+            {$ENDIF COMPILER14_UP}
             if (ALeft > TitleRect.Left) and (ALeft + Bmp.Width < TitleRect.Right) then
               DrawBitmapTransparent(Canvas, ALeft, (TitleRect.Bottom +
                 TitleRect.Top - Bmp.Height) div 2, Bmp, clFuchsia);
@@ -3372,6 +3467,16 @@ begin
       end
       else
         WriteCellText(ARect, MinOffs, MinOffs, '', taLeftJustify, False, IsRightToLeft);
+      {$IFDEF COMPILER14_UP}
+      if ([dgRowLines, dgColLines] * Options = [dgRowLines, dgColLines]) and
+         ((DrawingStyle = gdsClassic) or ((DrawingStyle = gdsThemed) and not ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP})) and
+         not (gdPressed in AState) then
+      begin
+        InflateRect(TitleRect, 1, 1);
+        DrawEdge(Canvas.Handle, TitleRect, BDR_RAISEDINNER, BF_BOTTOMRIGHT);
+        DrawEdge(Canvas.Handle, TitleRect, BDR_RAISEDINNER, BF_TOPLEFT);
+      end;
+      {$ENDIF COMPILER14_UP}
     finally
       Canvas.Pen.Color := SavePen;
     end;
@@ -3405,7 +3510,7 @@ begin
     Include(State, gdSelected);
   NewBackgrnd := Canvas.Brush.Color;
   Highlight := (gdSelected in State) and ((dgAlwaysShowSelection in Options) or Focused);
-  GetCellProps(Field, Canvas.Font, NewBackgrnd, Highlight or ActiveRowSelected);
+  GetCellProps(Column, Canvas.Font, NewBackgrnd, Highlight or ActiveRowSelected);
   if not Highlight and (ReadOnlyCellColor <> clDefault) and
      (not Field.CanModify or not CanEditCell(Field)) then
   begin
@@ -3440,13 +3545,16 @@ begin
     end
     else
     begin
-      if (Field is TStringField) or (FShowMemos and ((Field is TMemoField)
-        {$IFDEF COMPILER10_UP} or (Field is TWideMemoField) {$ENDIF})) then
+      if (Field <> nil) and
+         (WordWrapAllFields or (Field is TStringField) or (FShowMemos and IsMemoField(Field))) then
       begin
-        if Assigned(Field.OnGetText) then
-          MemoText := Field.DisplayText
-        else
-          MemoText := Field.AsString;
+        MemoText := Field.DisplayText;
+        if FShowMemos and IsMemoField(Field) then
+        begin
+          // The MemoField's default DisplayText is '(Memo)' but we want the content
+          if not Assigned(Field.OnGetText) then
+            MemoText := Field.AsString;
+        end;
         WriteCellText(Rect, 2, 2, MemoText, Column.Alignment,
           UseRightToLeftAlignmentForField(Field, Column.Alignment), False);
       end
@@ -3489,11 +3597,15 @@ begin
     SectionName := GetDefaultSection(Self);
   if Assigned(AppStorage) then
   begin
+    AppStorage.BeginUpdate;
+    try
     AppStorage.DeleteSubTree(SectionName);
-    with Columns do
-      for I := 0 to Count - 1 do
-        AppStorage.WriteString(AppStorage.ConcatPaths([SectionName, Format('%s.%s', [Name, Items[I].FieldName])]),
-          Format('%d,%d', [Items[I].Index, Items[I].Width]));
+      for I := 0 to Columns.Count - 1 do
+        AppStorage.WriteString(AppStorage.ConcatPaths([SectionName, Format('%s.%s', [Name, Columns.Items[I].FieldName])]),
+          Format('%d,%d', [Columns.Items[I].Index, Columns.Items[I].Width]));
+    finally
+      AppStorage.EndUpdate;
+    end;
   end;
 end;
 
@@ -3517,31 +3629,36 @@ begin
   else
     SectionName := GetDefaultSection(Self);
   if Assigned(AppStorage) then
-    with Columns do
+  begin
+    AppStorage.BeginUpdate;
+    try
+    SetLength(ColumnArray, Columns.Count);
+    for I := 0 to Columns.Count - 1 do
     begin
-      SetLength(ColumnArray, Count);
-      for I := 0 to Count - 1 do
+      S := AppStorage.ReadString(AppStorage.ConcatPaths([SectionName,
+        Format('%s.%s', [Name, Columns.Items[I].FieldName])]));
+      ColumnArray[I].Column := Columns.Items[I];
+      ColumnArray[I].EndIndex := Columns.Items[I].Index;
+      if S <> '' then
       begin
-        S := AppStorage.ReadString(AppStorage.ConcatPaths([SectionName,
-          Format('%s.%s', [Name, Items[I].FieldName])]));
-        ColumnArray[I].Column := Items[I];
-        ColumnArray[I].EndIndex := Items[I].Index;
-        if S <> '' then
-        begin
-          ColumnArray[I].EndIndex := StrToIntDef(ExtractWord(1, S, Delims), ColumnArray[I].EndIndex);
-          S := ExtractWord(2, S, Delims);
-          Items[I].Width := StrToIntDef(S, Items[I].Width);
-          Items[I].Visible := (S <> '-1');
-        end;
+        ColumnArray[I].EndIndex := StrToIntDef(ExtractWord(1, S, Delims), ColumnArray[I].EndIndex);
+        S := ExtractWord(2, S, Delims);
+        Columns.Items[I].Width := StrToIntDef(S, Columns.Items[I].Width);
+        Columns.Items[I].Visible := (S <> '-1');
       end;
-      for I := 0 to Count - 1 do
-        for J := 0 to Count - 1 do
-          if ColumnArray[J].EndIndex = I then
-          begin
-            ColumnArray[J].Column.Index := ColumnArray[J].EndIndex;
-            Break;
-          end;
     end;
+    for I := 0 to Columns.Count - 1 do
+      for J := 0 to Columns.Count - 1 do
+        if ColumnArray[J].EndIndex = I then
+        begin
+          ColumnArray[J].Column.Index := ColumnArray[J].EndIndex;
+          Break;
+        end;
+    finally
+      AppStorage.EndUpdate;
+    end;
+
+  end;
 end;
 
 procedure TJvDBGrid.LoadFromAppStore(const AppStorage: TJvCustomAppStorage; const Path: string);
@@ -3627,6 +3744,10 @@ begin
   // do nothing if not authorized to size columns
   if not (dgColumnResize in Options) and not (csDesigning in ComponentState) then
     Exit;
+
+
+  FCanResizeColumn := State = gsColSizing; //  If true, mouse double clicking can resize column.
+  FResizeColumnIndex := Index - 1;// Store the column index to resize.
 
   if (State = gsNormal) and (Y <= RowHeights[0]) then
   begin
@@ -3755,9 +3876,12 @@ end;
 function TJvDBGrid.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
   MousePos: TPoint): Boolean;
 begin
-  // Do not validate a record by error
-  if DataLink.Active and (DataLink.DataSet.State <> dsBrowse) then
-    DataLink.DataSet.Cancel;
+  if FCancelOnMouse then
+  begin
+    // Do not validate a record by error
+    if DataLink.Active and (DataLink.DataSet.State <> dsBrowse) then
+      DataLink.DataSet.Cancel;
+  end;
   Result := inherited DoMouseWheel(Shift, WheelDelta, MousePos);
 end;
 
@@ -4141,8 +4265,133 @@ begin
   Result := -1;
 end;
 
+function TJvDBGrid.GetMaxDisplayText: string;
+
+  procedure CheckText;
+  var
+    S: string;
+  begin
+    // if IsMemoField use AsString property
+    if FShowMemos and IsMemoField(Columns[FResizeColumnIndex].Field) then
+    begin
+      S := Columns[FResizeColumnIndex].Field.AsString;
+      if Length(Result) < Length(S) then
+        Result := S;
+    end
+    else
+    begin
+      S := Columns[FResizeColumnIndex].Field.DisplayText;
+      if Length(Result) < Length(S) then
+        Result := S;
+    end;
+  end;
+
+const
+  MaxRecords = 100; { value between 100 - 1000, or maybe calculated, or user input }
+var
+  DSet: TDataSet;
+  LBookmark: TBookmark;
+  I, ActiveRec: Integer;
+  LastCursor: TCursor;
+begin
+  Result := '';
+
+  DSet := DataSource.DataSet;
+
+  if (DSet.State in dsEditModes) and not FCancelOnMouse then
+    DSet.CheckBrowseMode;
+
+  // Start location
+  LBookmark := DSet.GetBookmark;
+  ActiveRec := DataLink.ActiveRecord;
+  DSet.DisableControls;
+  LastCursor := Screen.Cursor;
+  try
+    Screen.Cursor := crHourGlass;
+
+  // The iteration begins...
+    if (FColumnResize = gcrDataSet) and (DSet.RecordCount <= MaxRecords) then
+    begin
+      { Iterate all records in dataset. *** Very slow for thousands of records. *** }
+      DSet.First;
+      while not DSet.Eof do
+      begin
+        CheckText;
+        DSet.Next;
+      end;
+    end
+    else
+    begin
+      { Iterate only the rows shown by the grid. *** This is the faster approach. ***}
+      for I := 0 to DataLink.RecordCount{BufferCount} - 1 do
+      begin
+        DataLink.ActiveRecord := I;
+        CheckText;
+      end;
+    end;
+  finally
+    // ActiveRecord must be set BEFORE GotoBookmark
+    DataLink.ActiveRecord := ActiveRec;
+    try
+      GotoBookmarkEx(DSet, LBookmark, [rmExact], False); // Do not center current record
+    except
+    end;
+    DSet.FreeBookmark(LBookmark);
+
+    DSet.EnableControls;
+    Screen.Cursor := LastCursor;
+  end;
+end;
+
+function TJvDBGrid.GetColumnMaxWidth: Integer;
+const
+  Space = 7; // Some space needed to distinguish field data between columns.
+var
+  S: string;
+  RestoreCanvas: Boolean;
+  TempDC: HDC;
+  TM: TTextMetric;
+begin
+  if Columns[FResizeColumnIndex].Field <> nil then
+  begin
+    { Iterate through the recordset }
+    S := GetMaxDisplayText;
+    if S <> '' then
+    begin
+      RestoreCanvas := not HandleAllocated;
+      if RestoreCanvas then
+        Canvas.Handle := GetDC(0);
+      try
+        Canvas.Font := Font;
+        GetTextMetrics(Canvas.Handle, TM);
+        Result := Canvas.TextWidth(S) + TM.tmOverhang + 4 + Space;
+        if Result < DefaultColWidth then
+          Result := DefaultColWidth;
+      finally
+        if RestoreCanvas then
+        begin
+          TempDC := Canvas.Handle;
+          Canvas.Handle := 0;
+          ReleaseDC(0, TempDc);
+        end;
+      end;
+    end
+    else
+      Result := DefaultColWidth;
+  end
+  else { Field is not assigned }
+    Result := DefaultColWidth;
+end;
+
 procedure TJvDBGrid.DblClick;
 begin
+  { Resize column (double-click) }
+  if FCanResizeColumn then
+  begin
+    if FColumnResize <> gcrNone then
+      Columns[FResizeColumnIndex].Width := GetColumnMaxWidth;
+  end
+  else // When resize column (double-click) DO NOT trigger title DblClick event.
   if not DoTitleBtnDblClick then
     inherited DblClick;
   FTitleColumn := nil;
@@ -4157,17 +4406,23 @@ end;
 
 procedure TJvDBGrid.TitleClick(Column: TColumn);
 begin
+  { When resize DO NOT trigger title click event }
+  if FCanResizeColumn then
+    Exit;
+  
   FTitleColumn := Column;
   inherited TitleClick(Column);
   if AllowTitleClick then
   begin
     FPaintInfo.ColPressed := False;
     FPaintInfo.ColPressedIdx := -1;
+    {$IFNDEF COMPILER14_UP}
     {$IFDEF JVCLThemesEnabled}
     if UseXPThemes and ThemeServices.ThemesEnabled then
       if ValidCell(FCell) then
         InvalidateCell(FCell.X, FCell.Y);
     {$ENDIF JVCLThemesEnabled}
+    {$ENDIF ~COMPILER14_UP}
   end;
 end;
 
@@ -4210,12 +4465,12 @@ begin
     Self.MouseToCell(CursorPos.X, CursorPos.Y, ACol, ARow);
 
     //-------------------------------------------------------------------------
-    // ARow = -1 if 'outside' a valid cell;
+    // ARow <= -1 if 'outside' a valid cell;
     // Adjust CursorRect
     //-------------------------------------------------------------------------
-    if (FShowTitleHint or FShowCellHint) then
+    if FShowTitleHint or FShowCellHint then
     begin
-      if (ARow = -1) or ((ARow >= 1) and not FShowCellHint) then
+      if (ARow <= -1) or ((ARow >= 1) and not FShowCellHint) then
       begin
         if FShowCellHint then
         begin
@@ -4233,11 +4488,11 @@ begin
     end;
 
     if dgIndicator in Options then
-      Dec(ACol);
+      Dec(ACol, IndicatorOffset);
     if dgTitles in Options then
-      Dec(ARow);
+      Dec(ARow, TitleOffset);
 
-    if FShowTitleHint and (ACol >= 0) and (ARow = -1) then
+    if FShowTitleHint and (ACol >= 0) and (ARow <= -1) then
     begin
       AtCursorPosition := False;
       HintStr := Columns[ACol].FieldName;
@@ -4248,14 +4503,14 @@ begin
     end;
 
     if FShowCellHint and (ACol >= 0) and DataLink.Active and
-      ((ARow >= 0) or (not FShowTitleHint)) then
+      ((ARow >= 0) or not FShowTitleHint) then
     begin
       AtCursorPosition := False;
       HintStr := Hint;
       SaveRow := DataLink.ActiveRecord;
       try
         CalcOptions := DT_CALCRECT or DT_LEFT or DT_NOPREFIX or DrawTextBiDiModeFlagsReadingOnly;
-        if ARow = -1 then
+        if ARow <= -1 then // can be less than -1 if the column header is multiline (AdtField)
         begin
           Canvas.Font.Assign(Columns[ACol].Title.Font);
           HintStr := Columns[ACol].Title.Caption;
@@ -4269,22 +4524,17 @@ begin
           DataLink.ActiveRecord := ARow;
           if Field <> nil then
           begin
-            if Assigned(Field.OnGetText) then
-              HintStr := Field.DisplayText
+            if WordWrap and
+               (WordWrapAllFields or (Field is TStringField) or (FShowMemos and IsMemoField(Field))) then
+              CalcOptions := CalcOptions or DT_WORDBREAK;
+
+            HintStr := Field.DisplayText;
+            // MemoField's DisplayText is '(Memo)'
+            if not Assigned(Field.OnGetText) and IsMemoField(Field) then
+              HintStr := Field.AsString
             else
-            begin
-              if (Field is TStringField) or (Field is TMemoField) then
-              begin
-                HintStr := Field.AsString;
-                if WordWrap then
-                  CalcOptions := CalcOptions or DT_WORDBREAK;
-              end
-              else
-              if (Field is TBlobField) or EditWithBoolBox(Field) then
-                HintStr := ''
-              else
-                HintStr := Field.DisplayText;
-            end;
+            if (Field is TBlobField) or EditWithBoolBox(Field) then
+              HintStr := '';
           end;
         end;
 
@@ -4308,9 +4558,7 @@ begin
     end;
 
     if not AtCursorPosition and HintWindowClass.ClassNameIs('THintWindow') then
-    begin
       HintPos := ClientToScreen(CursorRect.TopLeft);
-    end;
   end;
   inherited;
 end;
@@ -4319,7 +4567,7 @@ procedure TJvDBGrid.WMVScroll(var Msg: TWMVScroll);
 var
   ALeftCol: Integer;
 begin
-  if (dgRowSelect in Options) then
+  if dgRowSelect in Options then
   begin
     ALeftCol := LeftCol;
     inherited;
@@ -4331,10 +4579,20 @@ end;
 
 procedure TJvDBGrid.SetWordWrap(Value: Boolean);
 begin
-  if FWordWrap <> Value then
+  if Value <> FWordWrap then
   begin
     FWordWrap := Value;
     Invalidate;
+  end;
+end;
+
+procedure TJvDBGrid.SetWordWrapAllFields(Value: Boolean);
+begin
+  if Value <> FWordWrapAllFields then
+  begin
+    FWordWrapAllFields := Value;
+    if WordWrap then
+      Invalidate;
   end;
 end;
 
@@ -4525,8 +4783,14 @@ begin
           if EscapeKey then
           begin
             CloseControl;
-            if Assigned(SelectedField) and (SelectedField.OldValue <> SelectedField.Value) then
-              SelectedField.Value := SelectedField.OldValue;
+            if Assigned(SelectedField) then
+            begin
+              // OldValue is only available when State=dsEdit, otherwise it can throw an AV.
+              if (SelectedField.DataSet.State = dsEdit) and (SelectedField.OldValue <> SelectedField.Value) then
+                SelectedField.Value := SelectedField.OldValue
+              else if (SelectedField.DataSet.State = dsInsert) and not SelectedField.IsNull then
+                SelectedField.Clear;
+            end;
           end;
         end;
       end;
@@ -4579,6 +4843,37 @@ procedure TJvDBGrid.ShowSelectColumnClick;
 begin
   ShowColumnsDialog;
 end;
+
+procedure TJvDBGrid.CreateParams(var Params: TCreateParams);
+begin
+  inherited CreateParams(Params);
+  {$IFDEF COMPILER9_UP}
+  // The grid can only handle ssNone and ssHorizontal. We have to emulate the other modes.
+  if FScrollBars = ssVertical then
+    Params.Style := Params.Style and not WS_HSCROLL;
+  {$ENDIF COMPILER9_UP}
+end;
+
+{$IFDEF COMPILER9_UP}
+procedure TJvDBGrid.SetScrollBars(Value: TScrollStyle);
+begin
+  if Value <> FScrollBars then
+  begin
+    FScrollBars := Value;
+    // The grid can only handle ssNone and ssHorizontal. We have to emulate the other modes.
+    if Value in [ssVertical, ssBoth] then
+      Value := ssHorizontal;
+
+    if Value = inherited ScrollBars then
+      RecreateWnd
+    else
+      inherited ScrollBars := Value;
+
+    if (FScrollBars = ssVertical) and HandleAllocated then
+      ShowScrollBar(Handle, SB_HORZ, False);
+  end;
+end;
+{$ENDIF COMPILER9_UP}
 
 procedure TJvDBGrid.SetSelectColumnsDialogStrings(const Value: TJvSelectDialogColumnStrings);
 begin
@@ -4635,20 +4930,6 @@ begin
   end;
 end;
 
-procedure TJvDBGrid.SetScrollBars(const Value: TScrollStyle);
-var
-  Style: Integer;
-const
-  ScrollStyles: array [TScrollStyle] of Integer = (0, WS_HSCROLL, WS_VSCROLL, WS_HSCROLL or WS_VSCROLL);
-begin
-  if FScrollBars <> Value then
-  begin
-    FScrollBars := Value;
-    Style := GetWindowLong(Handle, GWL_STYLE);
-    SetWindowLong(Handle, GWL_STYLE, Style or ScrollStyles[Value]);
-  end;
-end;
-
 procedure TJvDBGrid.SetShowMemos(const Value: Boolean);
 begin
   if FShowMemos <> Value then
@@ -4658,20 +4939,37 @@ begin
   end;
 end;
 
+function TJvDBGrid.GetUseXPThemes: Boolean;
+begin
+  {$IFDEF COMPILER14_UP}
+  Result := DrawingStyle = gdsThemed;
+  {$ELSE}
+  Result := FUseXPThemes;
+  {$ENDIF COMPILER14_UP}
+end;
+
 procedure TJvDBGrid.SetUseXPThemes(Value: Boolean);
 begin
-  if Value <> FUseXPThemes then
+  if Value <> UseXPThemes then
   begin
+    {$IFDEF COMPILER14_UP}
+    if Value then
+      DrawingStyle := gdsThemed
+    else
+      DrawingStyle := gdsClassic;
+    {$ELSE}
     FUseXPThemes := Value;
     Invalidate;
+    {$ENDIF COMPILER14_UP}
   end;
 end;
 
+{$IFNDEF COMPILER14_UP}
 {$IFDEF JVCLThemesEnabled}
 function TJvDBGrid.ColumnOffset: Integer;
 begin
   if dgIndicator in Options then
-    Result := 1
+    Result := IndicatorOffset
   else
     Result := 0;
 end;
@@ -4681,6 +4979,7 @@ begin
   Result := (ACell.X <> -1) and (ACell.Y <> -1);
 end;
 {$ENDIF JVCLThemesEnabled}
+{$ENDIF ~COMPILER14_UP}
 
 function TJvDBGrid.BeginColumnDrag(var Origin: Integer; var Destination: Integer; const MousePt: TPoint): Boolean;
 begin
@@ -4706,12 +5005,16 @@ end;
 {$ENDIF COMPILER10_UP}
 
 procedure TJvDBGrid.CMMouseEnter(var Message: TMessage);
+{$IFNDEF COMPILER14_UP}
 {$IFDEF JVCLThemesEnabled}
 var
   Cell: TGridCoord;
   lPt: TPoint;
 {$ENDIF JVCLThemesEnabled}
+{$ENDIF ~COMPILER14_UP}
 begin
+  inherited;
+  {$IFNDEF COMPILER14_UP}
   {$IFDEF JVCLThemesEnabled}
   lPt := Point(Mouse.CursorPos.X, Mouse.CursorPos.Y);
   Cell := MouseCoord(lPt.X, lPt.Y);
@@ -4719,15 +5022,19 @@ begin
     if (dgTitles in Options) and (Cell.Y = 0) then
       InvalidateCell(Cell.X, Cell.Y);
   {$ENDIF JVCLThemesEnabled}
+  {$ENDIF ~COMPILER14_UP}
 end;
 
 procedure TJvDBGrid.CMMouseLeave(var Message: TMessage);
 begin
+  inherited;
+  {$IFNDEF COMPILER14_UP}
   {$IFDEF JVCLThemesEnabled}
   if UseXPThemes and ThemeServices.ThemesEnabled then
     if ValidCell(FCell) then
       InvalidateCell(FCell.X, FCell.Y);
   {$ENDIF JVCLThemesEnabled}
+  {$ENDIF ~COMPILER14_UP}
   FCell.X := -1;
   FCell.Y := -1;
   FPaintInfo.MouseInCol := -1;
@@ -4738,11 +5045,13 @@ procedure TJvDBGrid.ColExit;
 begin
   inherited ColExit;
   FPaintInfo.MouseInCol := -1;
+  {$IFNDEF COMPILER14_UP}
   {$IFDEF JVCLThemesEnabled}
   if UseXPThemes and ThemeServices.ThemesEnabled then
     if ValidCell(FCell) then
       InvalidateCell(FCell.X, FCell.Y);
   {$ENDIF JVCLThemesEnabled}
+  {$ENDIF ~COMPILER14_UP}
 end;
 
 function TJvDBGrid.AllowTitleClick: Boolean;
@@ -4754,10 +5063,12 @@ procedure TJvDBGrid.ColumnMoved(FromIndex, ToIndex: Integer);
 begin
   inherited ColumnMoved(FromIndex, ToIndex);
   FPaintInfo.ColMoving := False;
+  {$IFNDEF COMPILER14_UP}
   {$IFDEF JVCLThemesEnabled}
   if UseXPThemes and ThemeServices.ThemesEnabled then
     Invalidate;
   {$ENDIF JVCLThemesEnabled}
+  {$ENDIF ~COMPILER14_UP}
 end;
 
 procedure TJvDBGrid.MouseWheelHandler(var Message: TMessage);

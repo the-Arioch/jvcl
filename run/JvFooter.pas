@@ -60,6 +60,9 @@ type
     property SpaceInterval: Integer read FSpaceInterval write SetSpaceInterval;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvFooter = class(TJvCustomPanel)
   private
     FBevelStyle: TJvBevelStyle;
@@ -275,7 +278,8 @@ var
   procedure DoTheCount(Idx: Integer);
   begin
     if (Controls[Idx] is TJvFooterBtn) and
-      (TJvFooterBtn(Controls[Idx]).Alignment = AAlignment) then
+      (TJvFooterBtn(Controls[Idx]).Alignment = AAlignment) and
+      (TJvFooterBtn(Controls[Idx]).Visible or (csDesigning in ComponentState)) then
     begin
       Inc(BtnCount);
       Inc(BtnTotalSpc, TJvFooterBtn(Controls[Idx]).SpaceInterval);

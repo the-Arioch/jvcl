@@ -38,7 +38,7 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Messages, Classes, SysUtils,
   JvComponentBase,
-  DBT, SetupApi, HID;
+  DBT, SetupApi, Hid, JvTypes;
 
 const
   // a version string for the component
@@ -147,17 +147,18 @@ type
 
   // a thread helper class to implement TJvHidDevice.OnData
 
-  TJvHidDeviceReadThread = class(TThread)
+  TJvHidDeviceReadThread = class(TJvCustomThread)
   private
     FErr: DWORD;
     procedure DoData;
     procedure DoDataError;
     constructor CtlCreate(const Dev: TJvHidDevice);
+  protected
+    procedure Execute; override;
   public
     Device: TJvHidDevice;
     NumBytesRead: Cardinal;
     Report: array of Byte;
-    procedure Execute; override;
     constructor Create(CreateSuspended: Boolean);
   end;
 
@@ -228,6 +229,10 @@ type
     procedure StartThread;
     procedure StopThread;
     // Constructor is hidden! Only a TJvHidDeviceController can create a TJvHidDevice object.
+    // APnPInfo becomes the property of this class, do not try to free it yourself,
+    // even if this call raises an exception.
+    // The destructor of this class will take care of the cleanup even when an exception
+    // is raised (as specified by the Delphi language)
     constructor CtlCreate(const APnPInfo: TJvHidPnPInfo;
       const Controller: TJvHidDeviceController);
   protected
@@ -344,6 +349,9 @@ type
 
   // controller class to manage all HID devices
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvHidDeviceController = class(TJvComponent)
   private
     // internal properties part
@@ -447,7 +455,7 @@ const
 implementation
 
 uses
-  JvResources, JvTypes;
+  JvResources;
 
 type
   EControllerError = class(EJVCLException);
@@ -497,6 +505,7 @@ procedure TJvHidDeviceReadThread.Execute;
 var
   SleepRet: DWORD;
 begin
+  NameThread(ThreadName);
   SleepRet := WAIT_IO_COMPLETION;
   while not Terminated do
   begin
@@ -1693,13 +1702,8 @@ var
             // fill in PnPInfo of device
             PnPInfo := TJvHidPnPInfo.Create(PnPHandle, DevData, PChar(@FunctionClassDeviceData.DevicePath));
             // create HID device object and add it to the device list
-            try
-              HidDev := TJvHidDevice.CtlCreate(PnPInfo, Self);
-              NewList.Add(HidDev);
-            except
-              // ignore device if unreadable but still free used memory
-              PnPInfo.Free;
-            end;
+            HidDev := TJvHidDevice.CtlCreate(PnPInfo, Self);
+            NewList.Add(HidDev);
             Inc(Devn);
           end;
           FreeMem(FunctionClassDeviceData);
@@ -1791,7 +1795,7 @@ begin
   if Size > 0 then
   begin
     SetLength(Buf, Size);
-    GetFileVersionInfo(HidModuleName, INVALID_HANDLE_VALUE, Size, @Buf[0]);
+    GetFileVersionInfo(HidModuleName, DWORD(INVALID_HANDLE_VALUE), Size, @Buf[0]);
     if VerQueryValue(@Buf[0], 'StringFileInfo\040904E4\FileVersion', Pointer(Value), Size) then
       Result := Value;
   end;

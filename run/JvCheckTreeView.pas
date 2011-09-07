@@ -105,6 +105,9 @@ type
     property RadioCheckedIndex: Integer index 3 read GetImageIndex write SetImageIndex default 4;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvCheckTreeView = class(TJvTreeView)
   private
     FCheckBoxOptions: TJvTreeViewCheckBoxOptions;
@@ -334,7 +337,7 @@ var
   ItemHandle: HTREEITEM;
   ItemRect: TRect;
 begin
-  if CheckBoxOptions.Style = cbsJVCL then
+  if (CheckBoxOptions.Style = cbsJVCL) and (csClicked in ControlState) then
   begin
     GetCursorPos(P);
     P := ScreenToClient(P);

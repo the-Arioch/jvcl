@@ -42,6 +42,9 @@ type
 
   TJvScrollBoxFillMode = (sfmTile, sfmStretch, sfmNone);
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvScrollBox = class(TJvExScrollBox)
   private
     FHotTrack: Boolean;
@@ -52,6 +55,8 @@ type
     FOnEraseBackground: TEraseBackgroundEvent;
     FBackground: TJvPicture;
     FBackgroundFillMode: TJvScrollBoxFillMode;
+    FLockRefreshCount : Integer;
+
     procedure SetHotTrack(const Value: Boolean);
     procedure WMHScroll(var Msg: TWMHScroll); message WM_HSCROLL;
     procedure WMVScroll(var Msg: TWMVScroll); message WM_VSCROLL;
@@ -67,11 +72,15 @@ type
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure PaintWindow(DC: HDC); override;
     procedure Paint; virtual;
-    function DoEraseBackground(Canvas: TCanvas; Param: Integer): Boolean; override;
+    function DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean; override;
     procedure PaintBackground;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+
+    procedure BeginUpdate;
+    procedure EndUpdate;
+
     property Canvas: TCanvas read FCanvas;
   published
     property Background: TPicture read GetBackground write SetBackground;
@@ -119,6 +128,8 @@ begin
   // where background was a TBitmap.
   FBackground := TJvPicture.Create;
   FBackgroundFillMode := sfmTile;
+
+  FLockRefreshCount := 0;
 end;
 
 destructor TJvScrollBox.Destroy;
@@ -265,7 +276,7 @@ begin
   ControlState := ControlState - [csCustomPaint];
 end;
 
-function TJvScrollBox.DoEraseBackground(Canvas: TCanvas; Param: Integer): Boolean;
+function TJvScrollBox.DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean;
 begin
   Result := False;
   if Assigned(FOnEraseBackground) then
@@ -337,6 +348,24 @@ begin
           Canvas.Draw(0, 0, Background.Graphic);
         end;
     end;
+  end;
+end;
+
+procedure TJvScrollBox.BeginUpdate;
+begin
+  if FLockRefreshCount = 0 then
+    SendMessage(Handle, WM_SETREDRAW, Ord(False), 0);
+
+  Inc(FLockRefreshCount);
+end;
+
+procedure TJvScrollBox.EndUpdate;
+begin
+  Dec(FLockRefreshCount);
+  if FLockRefreshCount = 0 then
+  begin
+    SendMessage(Handle, WM_SETREDRAW, Ord(True), 0);
+    RedrawWindow(Handle, nil, 0, RDW_ERASE or RDW_INVALIDATE or RDW_FRAME or RDW_ALLCHILDREN);
   end;
 end;
 

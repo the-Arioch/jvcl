@@ -23,7 +23,7 @@ Known Issues:
 -----------------------------------------------------------------------------}
 // $Id$
 
-unit JvID3v2;
+unit JvId3v2;
 
 {$I jvcl.inc}
 
@@ -37,7 +37,7 @@ uses
   {$IFNDEF COMPILER12_UP}
   JclUnicode,
   {$ENDIF ~COMPILER12_UP}
-  JvID3v2Types, JvID3v2Base;
+  JvId3v2Types, JvID3v2Base;
 
 type
   TJvID3Persistent = class(TPersistent)
@@ -301,6 +301,9 @@ type
     property Counter: Cardinal read GetCounter write SetCounter stored False;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvID3v2 = class(TJvID3Controller)
   private
     FID3Text: TJvID3Text;
@@ -311,6 +314,7 @@ type
     FImages: TJvID3Images;
     FOwner: TJvID3Owner;
     FPopularimeter: TJvID3Popularimeter;
+    FProcessPictures: Boolean;
     function GetPlayCounter: Cardinal;
     procedure SetPlayCounter(const Value: Cardinal);
   protected
@@ -324,6 +328,7 @@ type
   published
     { Do not store dummies }
     property Texts: TJvID3Text read FID3Text;
+    property ProcessPictures: Boolean read FProcessPictures write FProcessPictures stored True;
     property UserDefinedText: TJvID3UDText read FUserDefinedText;
     property Web: TJvID3Web read FWeb;
     property UserDefinedWeb: TJvID3UDUrl read FUserDefinedWeb;
@@ -350,7 +355,7 @@ implementation
 
 uses
   SysUtils, Math,
-  JvResources;
+  JvResources, JclSysUtils;
 
 //=== Local procedures =======================================================
 
@@ -768,7 +773,7 @@ end;
 
 function TJvID3Text.GetBPM: Cardinal;
 begin
-  Result := Trunc(StrToFloat(StringReplace(BPMStr, '.', {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator, [])));
+  Result := Trunc(StrToFloatDef(StringReplace(BPMStr, '.', JclFormatSettings.DecimalSeparator, []), 0));
 end;
 
 procedure TJvID3Text.SetBPM(const Value: Cardinal);
@@ -972,6 +977,7 @@ begin
   inherited Create(AOwner);
   RegisterClient(Self, ActiveChanged);
 
+  FProcessPictures := True;
   FID3Text := TJvID3Text.Create(Self);
   FWeb := TJvID3Web.Create(Self);
   FUserDefinedText := TJvID3UDText.Create(Self);
@@ -1004,10 +1010,13 @@ end;
 
 procedure TJvID3v2.ActiveChanged(Sender: TObject; Activated: Boolean);
 begin
-  if Activated then
-    FImages.Pictures.RetrievePictures
-  else
-    FImages.Pictures.RemovePictures;
+  if FProcessPictures then
+  begin
+    if Activated then
+      FImages.Pictures.RetrievePictures
+    else
+      FImages.Pictures.RemovePictures;
+  end;
 end;
 
 function TJvID3v2.GetPlayCounter: Cardinal;

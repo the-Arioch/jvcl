@@ -228,6 +228,10 @@ type
     FAutoCompleteItems: TStrings;
     FAutoCompleteOptions: TJvAutoCompleteOptions;
     FTextChanged: Boolean;
+    FInCMExit: Integer;
+    FCheckOnExit: Boolean;
+    FOnPopupChange: TNotifyEvent;
+    FOnPopupValueAccepted: TNotifyEvent;
     procedure SetAutoCompleteItems(Strings: TStrings);
     procedure SetAutoCompleteOptions(const Value: TJvAutoCompleteOptions);
     procedure SetAlignment(Value: TAlignment);
@@ -267,7 +271,6 @@ type
     procedure SetShowButton(const Value: Boolean);
     procedure SetDataConnector(const Value: TJvCustomComboEditDataConnector);
     procedure UpdateBtnBounds(var NewLeft, NewTop, NewWidth, NewHeight: Integer);
-    { (rb) renamed from UpdateEdit }
     procedure UpdateGroup;
     procedure CMWantSpecialKey(var Msg: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
     procedure CMBiDiModeChanged(var Msg: TMessage); message CM_BIDIMODECHANGED;
@@ -303,7 +306,7 @@ type
     procedure DoEnter; override;
     procedure DoExit; override;
     procedure DoCtl3DChanged; virtual;
-    function DoEraseBackground(Canvas: TCanvas; Param: Integer): Boolean; override;
+    function DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean; override;
     { Repositions the child controls; checkbox }
     procedure UpdateControls; virtual;
     { Updates the margins of the edit box }
@@ -352,12 +355,12 @@ type
     procedure SetReadOnly(Value: Boolean); virtual;
     procedure SetShowCaret;
     procedure UpdatePopupVisible;
+    procedure CMExit(var Message: TCMExit); message CM_EXIT;
     property Alignment: TAlignment read FAlignment write SetAlignment default taLeftJustify;
     property AlwaysEnableButton: Boolean read FAlwaysEnableButton write FAlwaysEnableButton default False;
     property AlwaysShowPopup: Boolean read FAlwaysShowPopup write FAlwaysShowPopup default False;
     property AutoCompleteItems: TStrings read FAutoCompleteItems write SetAutoCompleteItems;
-    property AutoCompleteOptions: TJvAutoCompleteOptions read FAutoCompleteOptions
-      write SetAutoCompleteOptions default [];
+    property AutoCompleteOptions: TJvAutoCompleteOptions read FAutoCompleteOptions write SetAutoCompleteOptions default [];
     property Button: TJvEditButton read FButton;
     property ButtonFlat: Boolean read GetButtonFlat write SetButtonFlat default False;
     property ButtonHint: string read GetButtonHint write SetButtonHint;
@@ -381,14 +384,24 @@ type
     property ReadOnly: Boolean read GetReadOnly write SetReadOnly default False;
     property SettingCursor: Boolean read GetSettingCursor;
     property ShowButton: Boolean read GetShowButton write SetShowButton default True;
+      // CheckOnExit disables the ValidateEdit call that TCustomMaskEdit executes when
+      // it receives a CM_EXIT message. If you set it to False, you should call ValidateEdit
+      // yourself when you want to validate the value (like in the OK button of a dialog).
+    property CheckOnExit: Boolean read FCheckOnExit write FCheckOnExit default True;
     property OnEnabledChanged: TNotifyEvent read FOnEnabledChanged write FOnEnabledChanged;
     property OnPopupShown: TNotifyEvent read FOnPopupShown write FOnPopupShown;
     property OnPopupHidden: TNotifyEvent read FOnPopupHidden write FOnPopupHidden;
+      // OnPopupChange is triggered when the edit text is changed while the popup is visible.
+    property OnPopupChange: TNotifyEvent read FOnPopupChange write FOnPopupChange;
+      // OnPopupValueAccepted is triggered when the value from the popup is accepted and written to
+      // the edit's text property. It is not triggered if the new value is the same as the old value.
+    property OnPopupValueAccepted: TNotifyEvent read FOnPopupValueAccepted write FOnPopupValueAccepted;
 
     property DataConnector: TJvCustomComboEditDataConnector read FDataConnector write SetDataConnector;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure ValidateEdit; override;
     class function DefaultImageIndex: TImageIndex; virtual;
     class function DefaultImages: TCustomImageList; virtual;
     procedure DoClick;
@@ -398,6 +411,9 @@ type
     property Ctl3D;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvComboEdit = class(TJvCustomComboEdit)
   public
     property Button;
@@ -482,6 +498,10 @@ type
     property OnStartDrag;
 
     property DataConnector;
+    property OnPopupShown;
+    property OnPopupHidden;
+    property OnPopupChange;
+    property OnPopupValueAccepted;
   end;
 
   { TJvFileDirEdit }
@@ -555,6 +575,9 @@ type
 
   TFileDialogKind = (dkOpen, dkSave, dkOpenPicture, dkSavePicture);
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvFilenameEdit = class(TJvFileDirEdit)
   private
     FDialog: TOpenDialog;
@@ -691,6 +714,9 @@ type
 
   TDirDialogKind = (dkVCL, dkWin32);
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDirectoryEdit = class(TJvFileDirEdit)
   private
     FOptions: TSelectDirOpts;
@@ -841,7 +867,6 @@ type
     FOnInvalidDate: TJvInvalidDateEvent;
     FDefaultToday: Boolean;
     FPopupColor: TColor;
-    FCheckOnExit: Boolean;
     FBlanksChar: Char;
     FCalendarHints: TStringList;
     FStartOfWeek: TDayOfWeekName;
@@ -907,7 +932,7 @@ type
 
     property BlanksChar: Char read FBlanksChar write SetBlanksChar default ' ';
     property CalendarHints: TStrings read GetCalendarHints write SetCalendarHints;
-    property CheckOnExit: Boolean read FCheckOnExit write FCheckOnExit default False;
+    property CheckOnExit default False;
     property DefaultToday: Boolean read FDefaultToday write FDefaultToday default False;
     property DialogTitle: string read GetDialogTitle write SetDialogTitle stored IsCustomTitle;
     property EditMask stored False;
@@ -945,6 +970,9 @@ type
     property MaxDate: TDateTime read FMaxDate write SetMaxDate stored StoreMaxDate;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDateEdit = class(TJvCustomDateEdit)
   protected
     procedure SetDate(Value: TDateTime); override;
@@ -1084,7 +1112,7 @@ uses
   MultiMon,
   JclFileUtils, JclStrings,
   JvPickDate, JvJCLUtils, JvJVCLUtils,
-  JvThemes, JvResources;
+  JvThemes, JvResources, JclSysUtils;
 
 {$R JvToolEdit.res}
 
@@ -1211,6 +1239,7 @@ var
   GDirImageIndexXP: TImageIndex = -1;
   GFileImageIndexXP: TImageIndex = -1;
   {$ENDIF JVCLThemesEnabled}
+  GCoInitialized: Integer = 0;
 
 //=== Local procedures =======================================================
 
@@ -1644,7 +1673,16 @@ begin
   FNumGlyphs := 1;
   FAutoCompleteItems := TStringList.Create;
   FAutoCompleteOptions := [];
-  CoInitialize(nil);
+  FCheckOnExit := True;
+
+  // Move to class contructor when Delphi 2010 is the minimum version
+  if GCoInitialized >= 0 then
+  begin
+    Inc(GCoInitialized);
+    if GCoInitialized = 1 then
+      if not Succeeded(CoInitialize(nil)) then
+        GCoInitialized := -1;
+  end;
   inherited OnKeyDown := LocalKeyDown;
 end;
 
@@ -1656,8 +1694,16 @@ begin
   FAutoCompleteItems.Free;
   FDataConnector.Free;
   inherited Destroy;
+
   // call after WM_DESTROY
-  CoUninitialize;
+
+  // Move to class destructor when Delphi 2010 is the minimum version
+  if GCoInitialized > 0 then
+  begin
+    Dec(GCoInitialized);
+    if GCoInitialized = 0 then
+      CoUninitialize;
+  end;
 end;
 
 function TJvCustomComboEdit.AcceptPopup(var Value: Variant): Boolean;
@@ -1674,6 +1720,8 @@ begin
     UpdatePopupVisible;
     //DoChange; (ahuser) "Text := Value" triggers Change;
   end;
+  if Assigned(FOnPopupValueAccepted) then
+    FOnPopupValueAccepted(Self);
 end;
 
 procedure TJvCustomComboEdit.ActionChange(Sender: TObject;
@@ -1708,17 +1756,25 @@ var
   I: Integer;
   SysMetrics, Metrics: TTextMetric;
 begin
+  // Get text height
   DC := GetDC(HWND_DESKTOP);
   GetTextMetrics(DC, SysMetrics);
   SaveFont := SelectObject(DC, Font.Handle);
   GetTextMetrics(DC, Metrics);
   SelectObject(DC, SaveFont);
   ReleaseDC(HWND_DESKTOP, DC);
-  if not Flat then
-    I := 8
-  else
-    I := 6;
-  I := GetSystemMetrics(SM_CYBORDER) * I;
+
+  // If necessary reserve space for border
+  I := 0;
+  if BorderStyle <> bsNone then
+  begin
+    if not Flat then
+      I := 8
+    else
+      I := 6;
+    I := GetSystemMetrics(SM_CYBORDER) * I;
+  end;
+
   if Height < Metrics.tmHeight + I then
     Height := Metrics.tmHeight + I;
 end;
@@ -1803,6 +1859,16 @@ procedure TJvCustomComboEdit.CMCtl3DChanged(var Msg: TMessage);
 begin
   inherited;
   DoCtl3DChanged;
+end;
+
+procedure TJvCustomComboEdit.CMExit(var Message: TCMExit);
+begin
+  Inc(FInCMExit); // used for FCheckOnExit
+  try
+    inherited;
+  finally
+    Dec(FInCMExit);
+  end;
 end;
 
 procedure TJvCustomComboEdit.CMPopupCloseup(var Msg: TMessage);
@@ -2000,7 +2066,7 @@ begin
   end;
 end;
 
-function TJvCustomComboEdit.DoEraseBackground(Canvas: TCanvas; Param: Integer): Boolean;
+function TJvCustomComboEdit.DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean;
 begin
   Result := True;
   if csDestroying in ComponentState then
@@ -2335,6 +2401,8 @@ end;
 
 procedure TJvCustomComboEdit.PopupChange;
 begin
+  if Assigned(FOnPopupChange) then
+    FOnPopupChange(Self);
 end;
 
 procedure TJvCustomComboEdit.PopupCloseUp(Sender: TObject; Accept: Boolean);
@@ -2380,6 +2448,13 @@ begin
 end;
 
 procedure TJvCustomComboEdit.PopupDropDown(DisableEdit: Boolean);
+type
+  TJvSizeRect = record
+    Top: Integer;
+    Left: Integer;
+    Width: Integer;
+    Height: Integer;
+  end;
 var
   P: TPoint;
   Y: Integer;
@@ -2516,7 +2591,7 @@ begin
           can't use that default dropdown button (because we then use toolbar buttons,
           and there is no themed dropdown toolbar button) }
         FButton.FDrawThemedDropDownBtn :=
-          ThemeServices.ThemesEnabled and not ButtonFlat;
+          ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and not ButtonFlat;
         if FButton.FDrawThemedDropDownBtn then
         begin
           FButton.ButtonGlyph.Glyph := nil;
@@ -2585,7 +2660,7 @@ begin
     the glyph is the default themed dropdown button. When ButtonFlat = True, we
     can't use that default dropdown button, so we have to recreate the glyph
     in this special case }
-  if ThemeServices.ThemesEnabled and (ImageKind = ikDropDown) then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and (ImageKind = ikDropDown) then
     RecreateGlyph;
   {$ENDIF JVCLThemesEnabled}
 end;
@@ -2868,7 +2943,7 @@ var
   BtnRect: TRect;
 begin
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     if BorderStyle = bsSingle then
     begin
@@ -2964,7 +3039,7 @@ begin
   { If flat and themes are enabled, move the left edge of the edit rectangle
     to the right, otherwise the theme edge paints over the border }
   { (rb) This was for a specific font/language; check if this is still necessary }
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     if BorderStyle = bsSingle then
     begin
@@ -2977,7 +3052,7 @@ begin
       end;
     end;
   end;
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
   if BorderStyle = bsSingle then
     if Ctl3D then
@@ -3003,10 +3078,16 @@ begin
   FPopupVisible := (FPopup <> nil) and FPopup.Visible;
 end;
 
+procedure TJvCustomComboEdit.ValidateEdit;
+begin
+  if CheckOnExit or (FInCMExit = 0) then
+    inherited ValidateEdit;
+end;
+
 {$IFDEF JVCLThemesEnabled}
 procedure TJvCustomComboEdit.WMNCCalcSize(var Msg: TWMNCCalcSize);
 begin
-  if ThemeServices.ThemesEnabled and Ctl3D and (BorderStyle = bsSingle) then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and Ctl3D and (BorderStyle = bsSingle) then
   begin
     with Msg.CalcSize_Params^ do
       InflateRect(rgrc[0], 1, 1);
@@ -3036,15 +3117,14 @@ var
   DrawRect: TRect;
   Details: TThemedElementDetails;
 begin
-  if ThemeServices.ThemesEnabled and Ctl3D and (BorderStyle = bsSingle) and
-     (Win32MajorVersion < 6) then // Vista draws the border animated and not with teEditTextNormal
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and Ctl3D and (BorderStyle = bsSingle) and
+     not CheckWin32Version(6, 0) then // Vista draws the border animated and not with teEditTextNormal
   begin
     DC := GetWindowDC(Handle);
     try
       GetWindowRect(Handle, DrawRect);
       OffsetRect(DrawRect, -DrawRect.Left, -DrawRect.Top);
-      with DrawRect do
-        ExcludeClipRect(DC, Left + 1, Top + 1, Right - 1, Bottom - 1);
+      ExcludeClipRect(DC, DrawRect.Left + 1, DrawRect.Top + 1, DrawRect.Right - 1, DrawRect.Bottom - 1);
 
       Details := ThemeServices.GetElementDetails(teEditTextNormal);
       ThemeServices.DrawElement(DC, Details, DrawRect);
@@ -3230,6 +3310,7 @@ begin
   FMinDate := NullDate;
   FMaxDate := NullDate;
 
+  FCheckOnExit := False;
   FBlanksChar := ' ';
   FTitle := RsDateDlgCaption;
   FPopupColor := clMenu;
@@ -3287,7 +3368,7 @@ begin
   Result := True;
   if Assigned(FOnAcceptDate) then
   begin
-    if VarIsNull(Value) or VarIsEmpty(Value) then
+    if VarIsNullEmpty(Value) then
       D := NullDate
     else
     try
@@ -3310,6 +3391,8 @@ begin
   UpdatePopupVisible;
   if Modified then
     inherited Change;
+  if Assigned(FOnPopupValueAccepted) then
+    FOnPopupValueAccepted(Self);
 end;
 
 procedure TJvCustomDateEdit.ApplyDate(Value: TDateTime);
@@ -3801,7 +3884,7 @@ end;
 
 function TJvCustomDateEdit.TextStored: Boolean;
 begin
-  Result := not IsEmptyStr(Text, [#0, ' ', {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator, FBlanksChar]);
+  Result := not IsEmptyStr(Text, [#0, ' ', JclFormatSettings.DateSeparator, FBlanksChar]);
 end;
 
 procedure TJvCustomDateEdit.UpdateFormat;
@@ -3908,7 +3991,7 @@ var
   Bmp: TBitmap;
 begin
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     if GDirImageIndexXP < 0 then
     begin
@@ -4214,7 +4297,7 @@ var
 {$ENDIF JVCLThemesEnabled}
 begin
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     if FDrawThemedDropDownBtn then
     begin
@@ -4577,7 +4660,7 @@ var
   Bmp: TBitmap;
 begin
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     if GFileImageIndexXP < 0 then
     begin

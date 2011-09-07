@@ -23,7 +23,7 @@ Known Issues:
 -----------------------------------------------------------------------------}
 // $Id$
 
-unit JvCABFile;
+unit JvCabFile;
 
 {$I jvcl.inc}
 {$I windowsonly.inc}
@@ -53,6 +53,9 @@ type
   TOnNeedNewCabinet = procedure(Sender: TObject; var Cont: Boolean; CABInfo: TCABInfo;
     var NewPath: string) of object;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvCABFile = class(TJvComponent)
   private
     FFileName: TFileName;
@@ -96,7 +99,7 @@ const
 implementation
 
 uses
-  SetupApi, WinConvTypes,
+  SetupApi, WinConvTypes, StrUtils,
   JvConsts, JvResources;
 
 constructor TJvCABFile.Create(AOwner: TComponent);
@@ -211,7 +214,7 @@ begin
       else
       begin
         // Extract specific file
-        if UpperCase(ExtractFileName(Sender.FDestPath)) = UpperCase(StrPas(CAB^.NameInCabinet)) then
+        if AnsiEndsText(StrPas(CAB^.NameInCabinet), Sender.FDestPath) then
         begin
           Path := Sender.FDestPath;
           for I := 1 to Length(Path) do

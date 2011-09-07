@@ -116,6 +116,7 @@ type
     procedure SetParentFlat(const Value: Boolean);
     procedure SetDropDownWidth(Value: Integer);
   protected
+    function IsItemHeightStored: Boolean; {$IFDEF COMPILER14_UP} override; {$ENDIF}
     function GetText: TCaption; virtual;
     procedure SetText(const Value: TCaption); reintroduce; virtual;
     procedure DoEnter; override;
@@ -152,6 +153,7 @@ type
     property Flat: Boolean read GetFlat write SetFlat default False;
     property ParentFlat: Boolean read GetParentFlat write SetParentFlat default True;
     property DropDownWidth: Integer read FDropDownWidth write SetDropDownWidth default 0;
+    property ItemHeight stored IsItemHeightStored;
 
     procedure CreateParams(var Params: TCreateParams); override;
     procedure DestroyWnd; override;
@@ -169,6 +171,9 @@ type
     function DeleteExactString(const Value: string; All: Boolean; CaseSensitive: Boolean = True): Integer;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvComboBox = class(TJvCustomComboBox)
   published
     property Align;
@@ -319,6 +324,9 @@ type
     property OrderedText: Boolean read FOrderedText write SetOrderedText default False;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvCheckedComboBox = class(TJvCustomCheckedComboBox)
   published
     property Items;
@@ -681,7 +689,7 @@ begin
     Font := Self.Font;
     Width := Self.Width;
     // use the current "DisplayDropDownLines" to determine height of window
-    Height := (DisplayDropDownLines * FListBox.itemHeight + 4 { FEdit.Height });
+    Height := (DisplayDropDownLines * FListBox.ItemHeight + 4 { FEdit.Height });
   end;
 end;
 
@@ -708,10 +716,7 @@ end;
 
 function TJvCustomCheckedComboBox.GetChecked(Index: Integer): Boolean;
 begin
-  if Index < FListBox.Items.Count then
-    Result := FListBox.Checked[Index]
-  else
-    Result := False;
+  Result := FListBox.Checked[Index];
 end;
 
 function TJvCustomCheckedComboBox.GetItemEnabled(Index: Integer): Boolean;
@@ -796,33 +801,35 @@ procedure TJvCustomCheckedComboBox.SetChecked(Index: Integer; Checked: Boolean);
 var
   S: string;
   ChangeData: Boolean;
+  WasChecked: Boolean;
 begin
-  if Index < FListBox.Items.Count then
+  WasChecked := FListBox.Checked[Index]; // throws EListError if Index is invalid
+  S := Text;
+  ChangeData := False;
+  if not WasChecked and Checked then
   begin
-    S := Text;
-    ChangeData := False;
-    if not FListBox.Checked[Index] and Checked then
-    begin
-      if Add(FListBox.Items[Index], S, Delimiter) then
-      begin
-        FCheckedCount := FCheckedCount + 1;
-        ChangeData := True;
-      end;
-    end
+    if Add(FListBox.Items[Index], S, Delimiter) then
+      ChangeData := True;
+  end
+  else
+  if WasChecked and not Checked then
+    if Remove(FListBox.Items[Index], S, Delimiter) then
+      ChangeData := True;
+
+  if WasChecked <> Checked then
+    if Checked then
+      FCheckedCount := FCheckedCount + 1
     else
-    if FListBox.Checked[Index] and not Checked then
-      if Remove(FListBox.Items[Index], S, Delimiter) then
-      begin
-        FCheckedCount := FCheckedCount - 1;
-        ChangeData := True;
-      end;
-    if ChangeData then
-    begin
-      FListBox.Checked[Index] := Checked;
-      ChangeText(S);
-      Change;
-    end;
+      FCheckedCount := FCheckedCount - 1;
+
+  if ChangeData then
+  begin
+    FListBox.Checked[Index] := Checked;
+    ChangeText(S);
   end;
+
+  if WasChecked <> Checked then
+    Change;
 end;
 
 procedure TJvCustomCheckedComboBox.SetCheckedAll(Sender: TObject);
@@ -851,13 +858,18 @@ procedure TJvCustomCheckedComboBox.SetInvertAll(Sender: TObject);
 var
   I: Integer;
   S: string;
+  NewCheckedCount: Integer;
 begin
   S := '';
+  NewCheckedCount := 0;
   for I := 0 to FListBox.Items.Count - 1 do
   begin
     FListBox.Checked[I] := not FListBox.Checked[I];
 
-    if FListBox.Checked[I] then begin
+    if FListBox.Checked[I] then
+    begin
+      Inc(NewCheckedCount);
+
        if S = '' then         
          S := FListBox.Items[I]
        else
@@ -865,7 +877,8 @@ begin
     end;
   end;
   ChangeText(S);
-  FCheckedCount := FListBox.Items.Count;
+
+  FCheckedCount := NewCheckedCount;
   Repaint;
   Change;
 end;
@@ -955,9 +968,8 @@ var
   I: Integer;
 begin
   FCheckedCount := 0;
-  with FListBox do
-    for I := 0 to Items.Count - 1 do
-      Checked[I] := False;
+  for I := 0 to FListBox.Items.Count - 1 do
+    FListBox.Checked[I] := False;
   ChangeText('');
   Change;
 end;
@@ -971,20 +983,19 @@ begin
   S := Text;
   if FListBox.Checked[FListBox.ItemIndex] then
   begin
+    FCheckedCount := FCheckedCount + 1;
     if not PartExist(FListBox.Items[FListBox.ItemIndex], S, Delimiter) then
     begin
       if not OrderedText then
         Add(FListBox.Items[FListBox.ItemIndex], S, Delimiter)
       else
         S := GetOrderedTextValue;
-
-      FCheckedCount := FCheckedCount + 1;
     end;
   end
   else
   begin
-    if Remove(FListBox.Items[FListBox.ItemIndex], S, Delimiter) then
-      FCheckedCount := FCheckedCount - 1;
+    FCheckedCount := FCheckedCount - 1;
+    Remove(FListBox.Items[FListBox.ItemIndex], S, Delimiter);
   end;
   ChangeText(S);
   Change;
@@ -1635,6 +1646,14 @@ begin
   end
   else
     Result := -1;
+end;
+
+function TJvCustomComboBox.IsItemHeightStored: Boolean;
+var
+  Value: Integer;
+begin
+  Value := ItemHeight;
+  Result := (Value <> 16) and (Value <> 0);
 end;
 
 function TJvCustomComboBox.IsProviderSelected: Boolean;

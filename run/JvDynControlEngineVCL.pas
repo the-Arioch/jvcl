@@ -738,6 +738,7 @@ type
     procedure ControlSetDefaultProperties;
     procedure ControlSetHint(const Value: string);
     //IJvDynControlProgressBar
+    procedure ControlSetMarquee(Value: Boolean);
     procedure ControlSetMax(Value: Integer);
     procedure ControlSetMin(Value: Integer);
     procedure ControlSetOnClick(Value: TNotifyEvent);
@@ -896,7 +897,7 @@ end;
 
 procedure TJvDynControlVCLMaskEdit.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlVCLMaskEdit.ControlGetValue: Variant;
@@ -986,7 +987,7 @@ end;
 
 procedure TJvDynControlVCLButtonEdit.ControlSetValue(Value: Variant);
 begin
-  FEditControl.Text := Value;
+  FEditControl.Text := VarToStr(Value);
 end;
 
 function TJvDynControlVCLButtonEdit.ControlGetValue: Variant;
@@ -1184,7 +1185,7 @@ end;
 
 procedure TJvDynControlVCLFileNameEdit.ControlSetValue(Value: Variant);
 begin
-  FEditControl.Text := Value;
+  FEditControl.Text := VarToStr(Value);
 end;
 
 function TJvDynControlVCLFileNameEdit.ControlGetValue: Variant;
@@ -1322,7 +1323,7 @@ end;
 
 procedure TJvDynControlVCLDirectoryEdit.ControlSetValue(Value: Variant);
 begin
-  FEditControl.Text := Value;
+  FEditControl.Text := VarToStr(Value);
 end;
 
 function TJvDynControlVCLDirectoryEdit.ControlGetValue: Variant;
@@ -1738,7 +1739,7 @@ end;
 
 procedure TJvDynControlVCLMemo.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlVCLMemo.ControlGetValue: Variant;
@@ -1843,7 +1844,7 @@ end;
 
 procedure TJvDynControlVCLRichEdit.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlVCLRichEdit.ControlGetValue: Variant;
@@ -2313,7 +2314,7 @@ begin
   if (Style = csDropDownList) and VarIsInt(Value) then
     ItemIndex := Items.IndexOf(VarToStr(Value))
   else
-    Text := Value;
+    Text := VarToStr(Value);
 end;
 
 function TJvDynControlVCLComboBox.ControlGetValue: Variant;
@@ -3170,6 +3171,16 @@ begin
   Anchors := Value;
 end;
 
+procedure TJvDynControlVCLProgressBar.ControlSetMarquee(Value: Boolean);
+begin
+  {$IFDEF DELPHI2009_UP}
+  if Value then
+    Style := pbstMarquee
+  else
+    Style := pbstNormal;
+  {$ENDIF DELPHI2009_UP}
+end;
+
 procedure TJvDynControlVCLProgressbar.ControlSetMax(Value: Integer);
 begin
   Max := Value;
@@ -3439,7 +3450,7 @@ end;
 
 procedure TJvDynControlVCLColorComboBox.ControlSetValue(Value: Variant);
 begin
-  Text := Value;
+  Text := VarToStr(Value);
 end;
 
 function TJvDynControlVCLColorComboBox.ControlGetValue: Variant;

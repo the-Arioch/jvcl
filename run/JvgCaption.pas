@@ -36,7 +36,7 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms,
   StdCtrls, ExtCtrls,
-  JvComponentBase,
+  JvComponentBase, JvJVCLUtils,
   JvgTypes, JvgUtils, JvgCommClasses;
 
 type
@@ -137,8 +137,7 @@ implementation
 
 uses
   Math,
-  JvResources, JvJVCLUtils;
-
+  JvResources;
 {$R JvgCaption.res}
 
 constructor TJvgCaption.Create(AOwner: TComponent);
@@ -204,6 +203,7 @@ end;
 procedure TJvgCaption.Notification(Component: TComponent;
   Operation: TOperation);
 begin
+  inherited Notification(Component, Operation);
   if (Component <> Self) and (Operation = opInsert) and (Component is TJvgCaption) then
     raise Exception.CreateRes(@RsEOnlyOneInstanceOfTJvgCaption);
 end;

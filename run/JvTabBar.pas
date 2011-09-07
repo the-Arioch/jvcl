@@ -176,6 +176,9 @@ type
     destructor Destroy; override;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvModernTabBarPainter = class(TJvTabBarPainter)
   private
     FFont: TFont;
@@ -379,6 +382,7 @@ type
     function TabAt(X, Y: Integer): TJvTabBarItem;
     function MakeVisible(Tab: TJvTabBarItem): Boolean;
     function FindData(Data: TObject): TJvTabBarItem;
+    function CloseTab(ATab: TJvTabBarItem): Boolean;
 
     procedure DragDrop(Source: TObject; X: Integer; Y: Integer); override;
 
@@ -422,6 +426,9 @@ type
     property OnLeftTabChange: TNotifyEvent read FOnLeftTabChange write FOnLeftTabChange;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvTabBar = class(TJvCustomTabBar)
   published
     property Align default alTop;
@@ -1247,6 +1254,22 @@ begin
   end;
 end;
 
+function TJvCustomTabBar.CloseTab(ATab: TJvTabBarItem): Boolean;
+begin
+  Result := False;
+  if ATab <> nil then
+  begin
+     FClosingTab := ATab;
+    try
+      Result := TabCloseQuery(FClosingTab);
+      if Result then
+        TabClosed(FClosingTab);
+    finally
+      FClosingTab := nil;
+    end;
+  end;
+end;
+
 function TJvCustomTabBar.AddTab(const Caption: string): TJvTabBarItem;
 begin
   Result := TJvTabBarItem(Tabs.Add);
@@ -2007,7 +2030,7 @@ const
 {$ENDIF JVCLThemesEnabled}
 begin
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
     DrawThemedFrameControl(Canvas.Handle, R, DFC_SCROLL, ScrollTypes[Button] or States[State])
   else
   {$ENDIF JVCLThemesEnabled}
@@ -2193,7 +2216,7 @@ begin
       else
         Brush.Color := CloseColor;
 
-      CloseR := GetCloseRect(Canvas, Tab, Tab.DisplayRect);
+      CloseR := GetCloseRect(Canvas, Tab, R);
       Pen.Color := CloseRectColor;
       if not Tab.Enabled then
         Pen.Color := CloseRectColorDisabled;

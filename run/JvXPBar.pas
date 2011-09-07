@@ -63,7 +63,7 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Classes, SysUtils,
   Graphics, Controls, Forms, ExtCtrls, ImgList, ActnList, Messages,
-  JvConsts, JvXPCore, JvXPCoreUtils, JvJVCLUtils;
+  JvConsts, JvXPCore, JvXPCoreUtils, JvJVCLUtils, JvTypes;
 
 type
   TJvXPBarRollDirection = (rdExpand, rdCollapse);
@@ -259,7 +259,7 @@ type
     property Items[Index: Integer]: TJvXPBarItem read GetItem; default;
   end;
 
-  TJvXPFadeThread = class(TThread)
+  TJvXPFadeThread = class(TJvCustomThread)
   private
     FWinXPBar: TJvXPCustomWinXPBar;
     FRollDirection: TJvXPBarRollDirection;
@@ -267,9 +267,9 @@ type
   protected
     procedure DoWinXPBarSetRollOffset;
     procedure DoWinXPBarInternalRedraw;
+    procedure Execute; override;
   public
     constructor Create(WinXPBar: TJvXPCustomWinXPBar; RollDirection: TJvXPBarRollDirection);
-    procedure Execute; override;
   end;
 
   TJvXPBarColors = class(TPersistent)
@@ -407,6 +407,9 @@ type
     procedure EndUpdate; override;
     procedure WMAfterXPBarCollapse(var Msg: TMessage); message WM_XPBARAFTERCOLLAPSE;
     procedure WMAfterXPBarExpand(var Msg: TMessage); message WM_XPBARAFTEREXPAND;
+    procedure WMWindowposchanging(var Msg: TWMWindowPosChanging); message WM_WINDOWPOSCHANGING;
+    procedure Loaded; override;
+    procedure CreateWnd; override;
     property Collapsed: Boolean read FCollapsed write SetCollapsed default False;
     property Colors: TJvXPBarColors read FColors write SetColors;
     property RollImages: TCustomImageList read FRollImages write SetRollImages;
@@ -458,6 +461,9 @@ type
     procedure InitiateAction; override;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvXPBar = class(TJvXPCustomWinXPBar)
   published
     property Caption;
@@ -1258,6 +1264,7 @@ begin
   FWinXPBar := WinXPBar;
   FRollDirection := RollDirection;
   FreeOnTerminate := True;
+  ThreadName := Format('%s: %s',[ClassName, WinXPBar.Name]);
 end;
 
 procedure TJvXPFadeThread.DoWinXPBarInternalRedraw;
@@ -1274,6 +1281,7 @@ procedure TJvXPFadeThread.Execute;
 var
   NewOffset: Integer;
 begin
+  NameThread(ThreadName);
   while not Terminated do
   try
     FWinXPBar.FRolling := True;
@@ -1340,7 +1348,7 @@ begin
   FCheckedFrameColor := dxColor_CheckedFrameColorXP;
   FFocusedFrameColor := dxColor_FocusedFrameColorXP;
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     Details := ThemeServices.GetElementDetails(tebHeaderBackgroundNormal);
     with Details do
@@ -1579,7 +1587,7 @@ var
   NewHeight: Integer;
 begin
   { TODO: Check this!!! }
-  if IsLocked then
+  if IsLocked or (csLoading in ComponentState) then
     Exit;
   NewHeight := FC_HEADER_MARGIN + HeaderHeight + FVisibleItems.Count * FRollOffset + FC_ITEM_MARGIN + 1;
   { full collapsing }
@@ -1588,6 +1596,23 @@ begin
     Dec(NewHeight, FC_ITEM_MARGIN);
 //  if Height <> NewHeight then
   Height := NewHeight - 5 + FTopSpace;
+end;
+
+procedure TJvXPCustomWinXPBar.WMWindowposchanging(var Msg: TWMWindowPosChanging);
+var
+  NewHeight: Integer;
+begin
+  if Msg.WindowPos.flags and SWP_NOSIZE = 0 then
+  begin
+    NewHeight := FC_HEADER_MARGIN + HeaderHeight + FVisibleItems.Count * FRollOffset + FC_ITEM_MARGIN + 1;
+    { full collapsing }
+    if ((FRolling and not FCollapsed) or (not FRolling and FCollapsed) or
+      (FVisibleItems.Count = 0)) then
+      Dec(NewHeight, FC_ITEM_MARGIN);
+
+    Msg.WindowPos.cy := NewHeight - 5 + FTopSpace;
+  end;
+  inherited;
 end;
 
 function TJvXPCustomWinXPBar.GetHitTestAt(X, Y: Integer): TJvXPBarHitTest;
@@ -1655,6 +1680,18 @@ begin
     FVisibleItems.Add(Item)
   else
     FVisibleItems.Delete(Item);
+end;
+
+procedure TJvXPCustomWinXPBar.Loaded;
+begin
+  inherited Loaded;
+  ResizeToMaxHeight;
+end;
+
+procedure TJvXPCustomWinXPBar.CreateWnd;
+begin
+  inherited CreateWnd; // sends WM_SIZE but no WM_WINDOWPOSCHANGING
+  ResizeToMaxHeight;
 end;
 
 procedure TJvXPCustomWinXPBar.HookMouseDown;
@@ -1795,7 +1832,7 @@ begin
   end;
 
   // resize to maximum height
-  ResizeToMaxHeight;
+  //ResizeToMaxHeight;   done in WM_WINDOWPOSCHANGING
   inherited HookResized;
 end;
 
@@ -1889,7 +1926,9 @@ begin
   begin
     FItemHeight := Value;
     if not FCollapsed then
-      RollOffset := FItemHeight;
+      RollOffset := FItemHeight
+    else
+      ResizeToMaxHeight;
   end;
 end;
 
@@ -2358,24 +2397,21 @@ end;
 procedure RoundedFrame(Canvas: TCanvas; ARect: TRect; AColor: TColor; R: Integer);
 begin
   // Draw Frame with round edges
-  with Canvas, ARect do
-  begin
-    Pen.Color := AColor;
-    Dec(Right);
-    Dec(Bottom);
-    Polygon(
-     [Point(Left + R, Top),
-      Point(Right - R, Top),
-      Point(Right, Top + R),
-      Point(Right, Bottom - R),
-      Point(Right - R, Bottom),
-      Point(Left + R, Bottom),
-      Point(Left, Bottom - R),
-      Point(Left, Top + R),
-      Point(Left + R, Top)]);
-    Inc(Right);
-    Inc(Bottom);
-  end;
+  Canvas.Pen.Color := AColor;
+  Dec(ARect.Right);
+  Dec(ARect.Bottom);
+  Canvas.Polygon(
+   [Point(ARect.Left + R, ARect.Top),
+    Point(ARect.Right - R, ARect.Top),
+    Point(ARect.Right, ARect.Top + R),
+    Point(ARect.Right, ARect.Bottom - R),
+    Point(ARect.Right - R, ARect.Bottom),
+    Point(ARect.Left + R, ARect.Bottom),
+    Point(ARect.Left, ARect.Bottom - R),
+    Point(ARect.Left, ARect.Top + R),
+    Point(ARect.Left + R, ARect.Top)]);
+  Inc(ARect.Right);
+  Inc(ARect.Bottom);
 end;
 
 procedure TJvXPCustomWinXPBar.SetHeaderRounded(const Value: Boolean);

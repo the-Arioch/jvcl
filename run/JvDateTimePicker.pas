@@ -52,13 +52,16 @@ uses
   JvExComCtrls;
 
 type
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDateTimePicker = class(TJvExDateTimePicker)
   private
     FNullText: string;
     FNullDate: TDateTime;
     FDropDownDate: TDate;
     FWeekNumbers: Boolean;
-    FKeepNullText: string;
+    FMsgSetDateTimeEmptyNullText: Boolean;
     FShowTodayCircle: Boolean;
     FShowToday: Boolean;
     procedure CNNotify(var Msg: TWMNotify); message CN_NOTIFY;
@@ -72,8 +75,12 @@ type
     function CheckNullValue(const ANullText, AFormat: string; AKind: TDateTimeKind; ADateTime, ANullDate: TDateTime): Boolean; overload; virtual;
     procedure Change; override;
     function MsgSetDateTime(Value: TSystemTime): Boolean; override;
+    procedure CheckValidDate(Value: TDate); override;
+    procedure CheckEmptyDate; override;
   public
     constructor Create(AOwner: TComponent); override;
+    procedure Clear;
+    function IsNull: Boolean;
   published
     property AutoSize;
     // The initial date to display when the drop-down calendar is shown and NullDate = Date/Time
@@ -140,6 +147,11 @@ begin
   FShowTodayCircle := True;
 end;
 
+function TJvDateTimePicker.IsNull: Boolean;
+begin
+  Result := (DateTime = NullDate) and (FNullText <> '');
+end;
+
 function TJvDateTimePicker.WithinDelta(Val1, Val2: TDateTime): Boolean;
 const
   cOneSecond = 1 / 86400;
@@ -148,22 +160,30 @@ begin
 end;
 
 function TJvDateTimePicker.CheckNullValue: Boolean;
-var
-  TestedNullText: string;
 begin
-  // Mantis 4058
-  if Focused then
-    TestedNullText := FKeepNullText
-  else
-    TestedNullText := FNullText;
+  Result := CheckNullValue(FNullText, Format, Kind, DateTime, NullDate);
+end;
 
-  Result := CheckNullValue(TestedNullText, Format, Kind, DateTime, NullDate);
+procedure TJvDateTimePicker.CheckEmptyDate;
+begin
+  // Don't throw the EDateTimeError if Date=0.0 and ShowCheckBox=False (Mantis #4651).
+  // The VCL has some strange behavior here. Why is 1899-12-30 not allowed. The Windows
+  // Control supports it, but TDateTimePicker doesn't.
+  // TDateTimePicker.SetTime() can't be "fixed" because it doesn't call CheckEmptyDate() but
+  // has the exact same code inline.
+  if not ShowCheckbox then
+  begin
+    Checked := False;
+    Invalidate;
+  end
+  else
+    inherited CheckEmptyDate;
 end;
 
 function TJvDateTimePicker.CheckNullValue(const ANullText, AFormat: string;
   AKind: TDateTimeKind; ADateTime, ANullDate: TDateTime): Boolean;
 begin
- // Warren added NullText length check so that this feature can be disabled if not used!
+  // Warren added NullText length check so that this feature can be disabled if not used!
   if ANullText = '' then
     Result := False
   else
@@ -174,6 +194,18 @@ begin
     SendMessage(Handle, DTM_SETFORMAT, 0, LPARAM(PChar('''' + ANullText + '''')))
   else
     SendMessage(Handle, DTM_SETFORMAT, 0, LPARAM(PChar(AFormat)));
+end;
+
+procedure TJvDateTimePicker.CheckValidDate(Value: TDate);
+begin
+  if Value <> NullDate then
+    inherited CheckValidDate(Value);
+end;
+
+procedure TJvDateTimePicker.Clear;
+begin
+  DateTime := NullDate;
+  Checked := False;
 end;
 
 procedure TJvDateTimePicker.SetNullDate(const Value: TDateTime);
@@ -187,15 +219,20 @@ begin
   if FNullText <> Value then
   begin
     FNullText := Value;
-//    FKeepNullText := Value;
     CheckNullValue;
   end;
 end;
 
 function TJvDateTimePicker.MsgSetDateTime(Value: TSystemTime): Boolean;
+var
+  LNullText: string;
 begin
   Result := inherited MsgSetDateTime(Value);
-  CheckNullValue(NullText, Format, Kind, SystemTimeToDateTime(Value), NullDate);
+  if FMsgSetDateTimeEmptyNullText then
+    LNullText := ''
+  else
+    LNullText := FNullText;
+  CheckNullValue(LNullText, Format, Kind, SystemTimeToDateTime(Value), NullDate);
 end;
 
 procedure TJvDateTimePicker.Change;
@@ -215,7 +252,7 @@ end;
 
 function IsWinVista_UP: Boolean;
 begin
-  Result := (Win32Platform = VER_PLATFORM_WIN32_NT) and (Win32MajorVersion >= 6);
+  Result := (Win32Platform = VER_PLATFORM_WIN32_NT) and CheckWin32Version(6, 0);
 end;
 
 procedure TJvDateTimePicker.UpdateCalendar(CalHandle: THandle);
@@ -244,7 +281,7 @@ begin
       SizeHandle := GetParent(CalHandle);
       // The dropdown window uses a 'border' of..
       {$IFDEF JVCLThemesEnabled}
-      if ThemeServices.ThemesEnabled then
+      if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
       begin
         // .. 3 pixels when themed
         Inc(MinWidth, 3*2);
@@ -271,6 +308,7 @@ var
   St: TSystemTime;
   Dt: TDateTime;
   AllowChange: Boolean;
+  WasMsgEmptyNullText: Boolean;
 begin
   with Msg, NMHdr^ do
     case code of
@@ -305,16 +343,27 @@ begin
         end;
       DTN_CLOSEUP:
         begin
+          // We need to use the NullText in MsgSetDateTime() because if the user clicked outside
+          // the popup calendar and the old value was NullValue, the NullValue date would be
+          // displayed instead of the NullText. And we don't want that to happen.
+          // Alternatively we could call CheckNullValue() after "inherited". But why do the check
+          // twice with the possibility of a short time span where the NullDate is visible.
+          WasMsgEmptyNullText := FMsgSetDateTimeEmptyNullText;
+          FMsgSetDateTimeEmptyNullText := False;
+          try
+            inherited;
+          finally
+            FMsgSetDateTimeEmptyNullText := WasMsgEmptyNullText;
+          end;
         end;
       NM_SETFOCUS:
         begin
-          FKeepNullText := NullText;
-          NullText := '';
+          FMsgSetDateTimeEmptyNullText := True;
           inherited;
         end;
       NM_KILLFOCUS:
         begin
-          NullText := FKeepNullText;
+          FMsgSetDateTimeEmptyNullText := False;
           inherited;
         end;
     else

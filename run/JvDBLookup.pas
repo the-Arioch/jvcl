@@ -216,6 +216,9 @@ type
     property Field: TField read GetField;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDBLookupList = class(TJvLookupControl)
   private
     FRecordIndex: Integer;
@@ -354,6 +357,9 @@ type
     constructor Create(AOwner: TComponent); override;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDBLookupCombo = class(TJvLookupControl, IJvDataControl)
   private
     FDataList: TJvPopupDataList;
@@ -537,6 +543,9 @@ type
     property OnCloseUp: TCloseUpEvent read FCloseUp write FCloseUp;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDBLookupEdit = class(TJvCustomComboEdit)
   private
     FChanging: Boolean;
@@ -672,7 +681,7 @@ implementation
 
 uses
   VDBConsts, StrUtils, DBConsts, SysUtils, Math, MultiMon,
-  JvJCLUtils, JvJVCLUtils, JvThemes, JvTypes, JvConsts, JvResources;
+  JvJCLUtils, JvJVCLUtils, JvThemes, JvTypes, JvConsts, JvResources, JclSysUtils;
 
 procedure CheckLookupFormat(const AFormat: string);
   { AFormat is passed to a Format function, but the only allowed
@@ -898,7 +907,7 @@ end;
 
 procedure TJvLookupControl.SetKeyValue(const Value: Variant);
 begin
-  if VarIsNull(Value) then
+  if VarIsNullEmpty(Value) then
     Self.Value := FEmptyValue
   else
     Self.Value := Value;
@@ -1969,14 +1978,11 @@ begin
           Image := GetPicture(False, True, TextMargin);
           if TextMargin > 0 then
           begin
-            with Bmp do
-            begin
-              Canvas.Font := Self.Canvas.Font;
-              Canvas.Brush := Self.Canvas.Brush;
-              Canvas.Pen := Self.Canvas.Pen;
-              Width := RectWidth(R);
-              Height := RectHeight(R);
-            end;
+            Bmp.Canvas.Font := Canvas.Font;
+            Bmp.Canvas.Brush := Canvas.Brush;
+            Bmp.Canvas.Pen := Canvas.Pen;
+            Bmp.Width := RectWidth(R);
+            Bmp.Height := RectHeight(R);
             ImageRect := Bounds(0, 0, TextMargin, RectHeight(R));
             Bmp.Canvas.FillRect(ImageRect);
             if Image <> nil then
@@ -2002,14 +2008,11 @@ begin
           Image := GetPicture(False, False, TextMargin);
           if TextMargin > 0 then
           begin
-            with Bmp do
-            begin
-              Canvas.Font := Self.Canvas.Font;
-              Canvas.Brush := Self.Canvas.Brush;
-              Canvas.Pen := Self.Canvas.Pen;
-              Width := RectWidth(R);
-              Height := RectHeight(R);
-            end;
+            Bmp.Canvas.Font := Canvas.Font;
+            Bmp.Canvas.Brush := Canvas.Brush;
+            Bmp.Canvas.Pen := Canvas.Pen;
+            Bmp.Width := RectWidth(R);
+            Bmp.Height := RectHeight(R);
             ImageRect := Bounds(0, 0, TextMargin, RectHeight(R));
             Bmp.Canvas.FillRect(ImageRect);
             if Image <> nil then
@@ -2519,7 +2522,7 @@ end;
 procedure TJvDBLookupCombo.CMHintShow(var Msg: TMessage);
 begin
   // don't show if list is visible
-  Msg.Result := Integer(FListVisible);
+  Msg.Result := LRESULT(Ord(FListVisible));
 end;
 
 procedure TJvDBLookupCombo.DoEnter;
@@ -2773,6 +2776,7 @@ procedure TJvDBLookupCombo.KeyDown(var Key: Word; Shift: TShiftState);
 var
   Delta: Integer;
 begin
+  inherited KeyDown(Key, Shift); // Let the user override the behavior
   if FListActive and ((Key = VK_UP) or (Key = VK_DOWN)) then
   begin
     if ssAlt in Shift then
@@ -2812,11 +2816,11 @@ begin
 
   if (Key <> 0) and FListVisible then
     FDataList.KeyDown(Key, Shift);
-  inherited KeyDown(Key, Shift);
 end;
 
 procedure TJvDBLookupCombo.KeyPress(var Key: Char);
 begin
+  inherited KeyPress(Key);
   if FListVisible then
   begin
     if TabSelects and IsDropDown and (Key = Tab) then
@@ -2849,7 +2853,6 @@ begin
       end;
     end;
   end;
-  inherited KeyPress(Key);
   if CharInSet(Key, [Cr, Esc]) then
     GetParentForm(Self).Perform(CM_DIALOGKEY, Byte(Key), 0);
 end;
@@ -3046,7 +3049,7 @@ begin
       begin
         StopTracking;
         MousePos := PointToSmallPoint(ListPos);
-        SendMessage(FDataList.Handle, WM_LBUTTONDOWN, 0, LPARAM(MousePos));
+        SendMessage(FDataList.Handle, WM_LBUTTONDOWN, 0, {$IFDEF RTL230_UP}PointToLParam{$ELSE}LPARAM{$ENDIF RTL230_UP}(MousePos));
         Exit;
       end;
     end;
@@ -3140,7 +3143,7 @@ begin
   IsClipped := False;
   SaveRgn := 0;
   if not DoubleBuffered and
-    (TMessage(Message).WParam <> TMessage(Message).LParam) and
+    (TMessage(Message).WParam <> WPARAM(TMessage(Message).LParam)) and
     { Do not exclude parts if we are painting into a memory device context or
       into a child's device context through DrawParentBackground(). }
     (WindowFromDC(Message.DC) = Handle) then
@@ -3315,9 +3318,9 @@ begin
     R.Right := FButtonWidth;
   end;
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
-    if (not FListActive) or (not Enabled) or ReadOnly then
+    if not FListActive or not Enabled or ReadOnly then
       State := tcDropDownButtonDisabled
     else
     if FPressed then
@@ -3434,7 +3437,7 @@ begin
   if csDesigning in ComponentState then
     Exit;
   {Windows XP themes use hot track states, hence we have to update the drop down button.}
-  if ThemeServices.ThemesEnabled and not MouseOver then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and not MouseOver then
   begin
     inherited MouseEnter(Control);
     Invalidate;
@@ -3460,7 +3463,7 @@ end;
 
 procedure TJvDBLookupCombo.CMGetDataLink(var Msg: TMessage);
 begin
-  Msg.Result := Integer(FDataLink);
+  Msg.Result := LRESULT(FDataLink);
 end;
 
 function TJvDBLookupCombo.GetDataLink: TDataLink;
@@ -3487,15 +3490,15 @@ end;
 
 procedure TJvDBLookupCombo.WMSetCursor(var Msg: TWMSetCursor);
 var
-  P: TPoint;
+  Pt: TPoint;
+  R: TRect;
 begin
-  GetCursorPos(P);
-  with ClientRect do
-    if PtInRect(Bounds(Right - FButtonWidth, Top, FButtonWidth, Bottom - Top),
-      ScreenToClient(P)) then
-      Windows.SetCursor(LoadCursor(0, IDC_ARROW))
-    else
-      inherited;
+  GetCursorPos(Pt);
+  R := ClientRect;
+  if PtInRect(Bounds(R.Right - FButtonWidth, R.Top, FButtonWidth, R.Bottom - R.Top), ScreenToClient(Pt)) then
+    Windows.SetCursor(LoadCursor(0, IDC_ARROW))
+  else
+    inherited;
 end;
 
 procedure TJvDBLookupCombo.BoundsChanged;
@@ -3846,7 +3849,7 @@ end;
 
 procedure TJvDBLookupEdit.SetPopupValue(const Value: Variant);
 begin
-  if VarIsNull(Value) or VarIsEmpty(Value) then
+  if VarIsNullEmpty(Value) then
     TJvPopupDataWindow(FPopup).Value := TJvPopupDataWindow(FPopup).EmptyValue
   else
     TJvPopupDataWindow(FPopup).DisplayValue := Value;

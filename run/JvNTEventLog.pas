@@ -38,12 +38,15 @@ uses
   Windows,
   {$ENDIF MSWINDOWS}
   Classes, SysUtils,
-  JvComponentBase;
+  JvComponentBase, JvTypes;
 
 type
   TNotifyChangeEventLog = class;
   TJvNTEventLogRecord = class;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvNTEventLog = class(TJvComponent)
   private
     FLogHandle: THandle;
@@ -82,7 +85,7 @@ type
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
   end;
 
-  TNotifyChangeEventLog = class(TThread)
+  TNotifyChangeEventLog = class(TJvCustomThread)
   private
     FEventLog: TJvNTEventLog;
     FEventHandle: THandle;
@@ -153,7 +156,7 @@ const
 
 type
   PEventLogRecord = ^TEventLogRecord;
-  TEventLogRecord = packed record
+  TEventLogRecord = record
     Length: DWORD; // Length of full record
     Reserved: DWORD; // Used by the service
     RecordNumber: DWORD; // Absolute record number
@@ -375,6 +378,7 @@ begin
   FEventLog := TJvNTEventLog(AOwner);
   FEventHandle := CreateEvent(nil, True, False, nil);
   NotifyChangeEventLog(FEventLog.FLogHandle, FEventHandle);
+  ThreadName := Format('%s: %s',[ClassName, AOwner.Name]);
 end;
 
 procedure TNotifyChangeEventLog.DoChange;
@@ -388,6 +392,7 @@ var
   LResult: DWORD;
 begin
   // (rom) secure thread against exceptions
+  NameThread(ThreadName);
   LResult := WAIT_OBJECT_0;
   try
     while not Terminated do

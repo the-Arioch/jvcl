@@ -50,6 +50,9 @@ type
     procedure Execute; override;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvCommStatus = class(TJvComponent)
   private
     FClearToSend: Boolean;
@@ -190,6 +193,7 @@ procedure TJvCommWatcher.Execute;
 var
   Mask: Cardinal;
 begin
+  NameThread(ThreadName);
   // (rom) secure thread against exceptions
   try
     while not Terminated do

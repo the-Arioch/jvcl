@@ -61,6 +61,9 @@ type
   TApplyAlignEvent = procedure(Sender: TObject; Align: TAlign;
     var Apply: Boolean) of object;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvSpeedBar = class(TJvCustomPanel, IJvDenySubClassing)
   private
     FSections: TList;
@@ -97,7 +100,7 @@ type
     FImageChangeLink: TChangeLink;
     procedure ImageListChange(Sender: TObject);
     procedure SetImages(Value: TCustomImageList);
-    procedure InvalidateItem(Item: TJvSpeedItem; Data: Longint);
+    procedure InvalidateItem(Item: TJvSpeedItem; Data: SizeInt);
     function GetOrientation: TBarOrientation;
     procedure SetOrientation(Value: TBarOrientation);
     procedure ApplyOrientation(Value: TBarOrientation);
@@ -116,21 +119,21 @@ type
     procedure WallpaperChanged(Sender: TObject);
     procedure SetWallpaper(Value: TPicture);
     procedure SetItemParams(Item: TJvSpeedItem; InitBounds: Boolean);
-    procedure SetItemVisible(Item: TJvSpeedItem; Data: Longint);
-    procedure SetItemEnabled(Item: TJvSpeedItem; Data: Longint);
-    procedure SetItemButtonSize(Item: TJvSpeedItem; Data: Longint);
-    procedure OffsetItem(Item: TJvSpeedItem; Data: Longint);
-    procedure ApplyItemSize(Item: TJvSpeedItem; Data: Longint);
-    procedure AlignItemToGrid(Item: TJvSpeedItem; Data: Longint);
-    procedure SwapItemBounds(Item: TJvSpeedItem; Data: Longint);
-    procedure SetItemEditing(Item: TJvSpeedItem; Data: Longint);
-    procedure HideItem(Item: TJvSpeedItem; Data: Longint);
-    procedure WriteItemLayout(Item: TJvSpeedItem; Data: Longint);
-    procedure FlatItem(Item: TJvSpeedItem; Data: Longint);
-    procedure TransparentItem(Item: TJvSpeedItem; Data: Longint);
+    procedure SetItemVisible(Item: TJvSpeedItem; Data: SizeInt);
+    procedure SetItemEnabled(Item: TJvSpeedItem; Data: SizeInt);
+    procedure SetItemButtonSize(Item: TJvSpeedItem; Data: SizeInt);
+    procedure OffsetItem(Item: TJvSpeedItem; Data: SizeInt);
+    procedure ApplyItemSize(Item: TJvSpeedItem; Data: SizeInt);
+    procedure AlignItemToGrid(Item: TJvSpeedItem; Data: SizeInt);
+    procedure SwapItemBounds(Item: TJvSpeedItem; Data: SizeInt);
+    procedure SetItemEditing(Item: TJvSpeedItem; Data: SizeInt);
+    procedure HideItem(Item: TJvSpeedItem; Data: SizeInt);
+    procedure WriteItemLayout(Item: TJvSpeedItem; Data: SizeInt);
+    procedure FlatItem(Item: TJvSpeedItem; Data: SizeInt);
+    procedure TransparentItem(Item: TJvSpeedItem; Data: SizeInt);
     function GetSection(Index: Integer): TJvSpeedBarSection;
     function GetSectionCount: Integer;
-    procedure GrayedItem(Item: TJvSpeedItem; Data: Longint);
+    procedure GrayedItem(Item: TJvSpeedItem; Data: SizeInt);
     function GetFramePos(X, Y: Integer; var Apply: Boolean): Integer;
     function GetFrameRect(X, Y: Integer): TRect;
     procedure StartDragFrame;
@@ -1631,7 +1634,7 @@ begin
     Inc(Result, BevelWidth);
 end;
 
-procedure TJvSpeedBar.SetItemVisible(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.SetItemVisible(Item: TJvSpeedItem; Data: SizeInt);
 var
   ItemVisible: Boolean;
 begin
@@ -1641,18 +1644,18 @@ begin
     Item.FButton.Parent := Self;
 end;
 
-procedure TJvSpeedBar.SetItemEnabled(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.SetItemEnabled(Item: TJvSpeedItem; Data: SizeInt);
 begin
   Item.FButton.Enabled := Item.Enabled and Self.Enabled;
 end;
 
-procedure TJvSpeedBar.SetItemButtonSize(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.SetItemButtonSize(Item: TJvSpeedItem; Data: SizeInt);
 begin
   ApplyItemSize(Item, Data);
   Item.Visible := Item.Visible; { update visible and parent after loading }
 end;
 
-procedure TJvSpeedBar.SwapItemBounds(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.SwapItemBounds(Item: TJvSpeedItem; Data: SizeInt);
 begin
   Item.FButton.SetBounds(Item.Top, Item.Left, FButtonSize.X, FButtonSize.Y);
 end;
@@ -1945,7 +1948,7 @@ begin
   ForEachItem(AlignItemToGrid, 0);
 end;
 
-procedure TJvSpeedBar.AlignItemToGrid(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.AlignItemToGrid(Item: TJvSpeedItem; Data: SizeInt);
 begin
   if Item.Visible then
   begin
@@ -1990,7 +1993,7 @@ begin
   end;
 end;
 
-procedure TJvSpeedBar.SetItemEditing(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.SetItemEditing(Item: TJvSpeedItem; Data: SizeInt);
 begin
   Item.SetEditing(FEditWin <> NullHandle);
 end;
@@ -2038,7 +2041,7 @@ begin
     inherited Paint;
     Canvas.Brush.Color := Color;
     {$IFDEF JVCLThemesEnabled}
-    if ThemeServices.ThemesEnabled and ParentBackground then
+    if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and ParentBackground then
     begin
       Canvas.Brush.Color := Parent.Brush.Color;
       DrawThemedBackground(Self, Canvas, Rect);
@@ -2051,9 +2054,8 @@ begin
     begin
       SaveIndex := SaveDC(Canvas.Handle);
       try
-        with Rect do
-          IntersectClipRect(Canvas.Handle, Left, Top, Right - Left +
-            BevelSize, Bottom - Top + BevelSize);
+        IntersectClipRect(Canvas.Handle, Rect.Left, Rect.Top, Rect.Right - Rect.Left +
+          BevelSize, Rect.Bottom - Rect.Top + BevelSize);
         if sbStretchBitmap in Options then
           Canvas.StretchDraw(Rect, FWallpaper.Graphic)
         else
@@ -2247,17 +2249,17 @@ begin
     ForEachItem(OffsetItem, SizeInt(@P));
 end;
 
-procedure TJvSpeedBar.FlatItem(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.FlatItem(Item: TJvSpeedItem; Data: SizeInt);
 begin
   Item.FButton.Flat := Boolean(Data);
 end;
 
-procedure TJvSpeedBar.GrayedItem(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.GrayedItem(Item: TJvSpeedItem; Data: SizeInt);
 begin
   Item.FButton.GrayedInactive := Boolean(Data);
 end;
 
-procedure TJvSpeedBar.TransparentItem(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.TransparentItem(Item: TJvSpeedItem; Data: SizeInt);
 begin
   Item.FButton.Transparent := Boolean(Data);
 end;
@@ -2290,7 +2292,7 @@ begin
   end;
 end;
 
-procedure TJvSpeedBar.OffsetItem(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.OffsetItem(Item: TJvSpeedItem; Data: SizeInt);
 var
   P: TPoint;
 begin
@@ -2375,7 +2377,7 @@ begin
   end;
 end;
 
-procedure TJvSpeedBar.ApplyItemSize(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.ApplyItemSize(Item: TJvSpeedItem; Data: SizeInt);
 begin
   with Item do
     FButton.SetBounds(FButton.Left, FButton.Top, FButtonSize.X, FButtonSize.Y);
@@ -2471,7 +2473,7 @@ begin
       SetImages(nil);
 end;
 
-procedure TJvSpeedBar.InvalidateItem(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.InvalidateItem(Item: TJvSpeedItem; Data: SizeInt);
 begin
   with Item do
     if Button <> nil then
@@ -2612,11 +2614,8 @@ begin
     Result := FPrevRect;
     Exit;
   end;
-  with Result do
-  begin
-    TopLeft := Parent.ClientToScreen(TopLeft);
-    BottomRight := Parent.ClientToScreen(BottomRight);
-  end;
+  Result.TopLeft := Parent.ClientToScreen(Result.TopLeft);
+  Result.BottomRight := Parent.ClientToScreen(Result.BottomRight);
   case GetOrientation of
     boHorizontal:
       W := Height;
@@ -2641,11 +2640,8 @@ procedure TJvSpeedBar.StartDragFrame;
 var
   Rect: TRect;
 begin
-  with Rect do
-  begin
-    TopLeft := ClientToScreen(Point(0, 0));
-    BottomRight := ClientToScreen(Point(Width, Height));
-  end;
+  Rect.TopLeft := ClientToScreen(Point(0, 0));
+  Rect.BottomRight := ClientToScreen(Point(Width, Height));
   FPrevRect := Rect;
   FPrevAlign := Align;
   DrawInvertFrame(FPrevRect, DragFrameWidth);
@@ -2871,12 +2867,12 @@ type
     Path: string;
   end;
 
-procedure TJvSpeedBar.HideItem(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.HideItem(Item: TJvSpeedItem; Data: SizeInt);
 begin
   Item.Visible := False;
 end;
 
-procedure TJvSpeedBar.WriteItemLayout(Item: TJvSpeedItem; Data: Longint);
+procedure TJvSpeedBar.WriteItemLayout(Item: TJvSpeedItem; Data: SizeInt);
 begin
   if Item.Visible and Item.Stored then
   begin
@@ -2907,58 +2903,63 @@ var
   S: string;
 begin
   FPrevAlign := Align;
-  if AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sVer]), FVersion) < FVersion then
-    // (marcelb) shouldn't we raise an exception "Invalid version" here?
-    Exit;
-  if sbAllowDrag in Options then
+  AppStorage.BeginUpdate;
   try
-    Align := TAlign(AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sPosition]), Integer(Align)));
-  except
-    Align := alTop;
-  end;
-  if Owner is TCustomForm then
-    I := TForm(Owner).PixelsPerInch
-  else
-    I := 0;
-  if Screen.PixelsPerInch <> AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sPixelsPerInch]), I) then
-  begin
+    if AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sVer]), FVersion) < FVersion then
+      // (marcelb) shouldn't we raise an exception "Invalid version" here?
+      Exit;
+    if sbAllowDrag in Options then
+    try
+      Align := TAlign(AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sPosition]), Integer(Align)));
+    except
+      Align := alTop;
+    end;
+    if Owner is TCustomForm then
+      I := TForm(Owner).PixelsPerInch
+    else
+      I := 0;
+    if Screen.PixelsPerInch <> AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sPixelsPerInch]), I) then
+    begin
+      if FPrevAlign <> Align then
+        PosChanged;
+      Exit;
+    end;
+    if sbAllowResize in Options then
+    begin
+      if Align in [alTop, alBottom] then
+        Height := AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sBarWidth]), Height)
+      else
+      if Align in [alLeft, alRight] then
+        Width := AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sBarWidth]), Width);
+    end;
     if FPrevAlign <> Align then
       PosChanged;
-    Exit;
-  end;
-  if sbAllowResize in Options then
-  begin
-    if Align in [alTop, alBottom] then
-      Height := AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sBarWidth]), Height)
-    else
-    if Align in [alLeft, alRight] then
-      Width := AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sBarWidth]), Width);
-  end;
-  if FPrevAlign <> Align then
-    PosChanged;
-  {if (AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sBtnWidth]), FButtonSize.X) >
-    FButtonSize.X) or (AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sBtnHeight]),
-    FButtonSize.Y) > FButtonSize.Y) then Exit;}
-  Count := AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sCount]), 0);
-  if Count > 0 then
-  begin
-    ForEachItem(HideItem, 0);
-    for I := 1 to Count do
+    {if (AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sBtnWidth]), FButtonSize.X) >
+      FButtonSize.X) or (AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sBtnHeight]),
+      FButtonSize.Y) > FButtonSize.Y) then Exit;}
+    Count := AppStorage.ReadInteger(AppStorage.ConcatPaths([Path, sCount]), 0);
+    if Count > 0 then
     begin
-      S := AppStorage.ReadString(AppStorage.ConcatPaths([Path, sBtn + IntToStr(I)]), '');
-      if S <> '' then
+      ForEachItem(HideItem, 0);
+      for I := 1 to Count do
       begin
-        Item := SearchItem(ExtractWord(1, S, Delims));
-        if Item <> nil then
+        S := AppStorage.ReadString(AppStorage.ConcatPaths([Path, sBtn + IntToStr(I)]), '');
+        if S <> '' then
         begin
-          Item.Left := Max(StrToIntDef(ExtractWord(2, S, Delims), Item.Left),
-            FOffset.X);
-          Item.Top := Max(StrToIntDef(ExtractWord(3, S, Delims), Item.Top),
-            FOffset.Y);
-          Item.Visible := True;
+          Item := SearchItem(ExtractWord(1, S, Delims));
+          if Item <> nil then
+          begin
+            Item.Left := Max(StrToIntDef(ExtractWord(2, S, Delims), Item.Left),
+              FOffset.X);
+            Item.Top := Max(StrToIntDef(ExtractWord(3, S, Delims), Item.Top),
+              FOffset.Y);
+            Item.Visible := True;
+          end;
         end;
       end;
     end;
+  finally
+    AppStorage.EndUpdate;
   end;
   Repaint;
 end;
@@ -2967,22 +2968,27 @@ procedure TJvSpeedBar.SaveToAppStorage(const AppStorage: TJvCustomAppStorage; co
 var
   Data: TIniData;
 begin
-  Data.AppStorage := AppStorage;
-  Data.Path := Path;
-  Data.I := 0;
-  AppStorage.DeleteSubTree(Path);
-  AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sPosition]), Integer(Align));
-  if Align in [alTop, alBottom] then
-    AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sBarWidth]), Height)
-  else
-  if Align in [alLeft, alRight] then
-    AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sBarWidth]), Width);
-  AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sVer]), FVersion);
-  AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sPixelsPerInch]), Screen.PixelsPerInch);
-  AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sBtnWidth]), FButtonSize.X);
-  AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sBtnHeight]), FButtonSize.Y);
-  ForEachItem(WriteItemLayout, SizeInt(@Data));
-  AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sCount]), Data.I);
+  AppStorage.BeginUpdate;
+  try
+    Data.AppStorage := AppStorage;
+    Data.Path := Path;
+    Data.I := 0;
+    AppStorage.DeleteSubTree(Path);
+    AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sPosition]), Integer(Align));
+    if Align in [alTop, alBottom] then
+      AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sBarWidth]), Height)
+    else
+    if Align in [alLeft, alRight] then
+      AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sBarWidth]), Width);
+    AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sVer]), FVersion);
+    AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sPixelsPerInch]), Screen.PixelsPerInch);
+    AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sBtnWidth]), FButtonSize.X);
+    AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sBtnHeight]), FButtonSize.Y);
+    ForEachItem(WriteItemLayout, SizeInt(@Data));
+    AppStorage.WriteInteger(AppStorage.ConcatPaths([Path, sCount]), Data.I);
+  finally
+    AppStorage.EndUpdate;
+  end;
 end;
 
 procedure TJvSpeedBar.Load;

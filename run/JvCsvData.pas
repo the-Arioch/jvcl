@@ -318,6 +318,7 @@ type
 
     FSeparator: Char;
     FDecimalSeparator: Char; { NOTE: DEFAULT value for historical backwards compatibilty reasons is the USA default of '.' }
+    FFilteredCount: Integer; // number of records that are filtered
 
     function GetUserTag(Index: Integer): Integer;
     procedure SetUserTag(Index, Value: Integer);
@@ -351,6 +352,8 @@ type
     property BackslashCrLf:Boolean read FBackslashCrLf write FBackslashCrLf; // Are CR/LFs changed to \r and \n?
     property UserTag[Index: Integer]: Integer read GetUserTag write SetUserTag;
     property UserData[Index: Integer]: Pointer read GetUserData write SetUserData;
+
+    property FilteredCount: Integer read FFilteredCount;
 
     { these properties should ONLY be set before any actual rows have been allocated. }
     property TextBufferSize: Integer read FTextBufferSize write FTextBufferSize; // How big is TJvCsvRow.Text effectively?
@@ -442,10 +445,13 @@ type
     function GetBackslashCrLf: Boolean;
     procedure SetBackslashCrLf(const Value: Boolean);
     function GetDecimalSeparator: Char;
+    // ----------- THIS IS A DUMMY FUNCTION, DON'T USE IT!:
+    function LocateRecord(const KeyFields: string; const KeyValues: Variant; Options: TLocateOptions): Boolean;
     procedure SetDecimalSeparator(const Value: Char);
 
     function _CsvFloatToStr(Value: Double): string;
 
+    procedure SetRowFiltered(ARow: PCsvRow; AFiltered: Boolean);
   protected
     // (rom) inacceptable names. Probably most of this should be private.
     FTempBuffer: TJvRecordBuffer; // Allocated on first access to field variable data only!
@@ -645,10 +651,7 @@ type
 
     procedure CustomFilter(FilterCallback: TJvCustomCsvDataSetFilterFunction); {NEW:APRIL 2004-WP}
 
-    // ----------- THIS IS A DUMMY FUNCTION, DON'T USE IT!:
-    function Locate(const KeyFields: string; const KeyValues: Variant;
-      Options: TLocateOptions): Boolean; override;
-
+    function Locate(const KeyFields: string; const KeyValues: Variant; Options: TLocateOptions): Boolean; override;
     //------------
 
     /// procedure FilteredDeletion(Inverted: Boolean); /// XXX TODO?
@@ -725,13 +728,14 @@ type
     function GetColumnsAsString: string; virtual;
     { Row Append one string }
     procedure AppendRowString(const RowAsString: string);    // Along with GetRowAsString, easy way to copy a dataset to another dataset!
+    procedure CreateFields; override;
 
     function IsKeyUnique: Boolean; // Checks current row's key uniqueness. Note that FCsvKeyDef MUST be set!
     procedure SaveToFile(const FileName: string);
     procedure LoadFromFile(const FileName: string);
 
     procedure DeleteCsvColumn(const AFieldName: string); // must be done when not Active! [NEW 2007!]
-
+    function Lookup(const KeyFields: string; const KeyValues: Variant; const ResultFields: string): Variant; override;
      {These are made protected so that you can write another derived component which has access to various protected fields }
   protected
     property InternalData: TJvCsvRows read FData write FData;
@@ -815,6 +819,9 @@ type
   end;
 
   // TJvCsvDataSet is just a TJvCustomCsvDataSet with all properties and events exposed:
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvCsvDataSet = class(TJvCustomCsvDataSet)
   public
     property TableName;
@@ -943,7 +950,7 @@ implementation
 
 uses
   Variants, Controls, Forms,
-  JvJVCLUtils, JvCsvParse, JvConsts, JvResources, JvTypes;
+  JvJVCLUtils, JvCsvParse, JvConsts, JvResources, JvTypes, JclSysUtils;
 
 const
   // These characters cannot be used for separator for various reasons:
@@ -1361,6 +1368,18 @@ begin
   Result := FData.GetUserTag(RecNo);
 end;
 
+procedure TJvCustomCsvDataSet.SetRowFiltered(ARow: PCsvRow; AFiltered: Boolean);
+begin
+  if ARow^.Filtered <> AFiltered then
+  begin
+    if AFiltered then
+      Inc(FData.FFilteredCount)
+    else
+      Dec(FData.FFilteredCount);
+    ARow^.Filtered := AFiltered;
+  end;
+end;
+
 procedure TJvCustomCsvDataSet.SetRowTag(TagValue: Integer);
 var
   RecNo: Integer;
@@ -1413,7 +1432,7 @@ begin
   inherited;
   FFileDirty := False;
   if FUseSystemDecimalSeparator then
-    FData.DecimalSeparator := SysUtils.{$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator;
+    FData.DecimalSeparator := JclFormatSettings.DecimalSeparator;
 end;
 
 procedure TJvCustomCsvDataSet.SetAllUserData(Data: Pointer);
@@ -1613,7 +1632,7 @@ begin
     PRow := PCsvRow(FData[I]);
     Assert(Assigned(PRow));
     // if custom function returns False, hide the row.
-    PRow^.Filtered := not FilterCallback(I);
+    SetRowFiltered(PRow, not FilterCallback(I));
   end;
   FIsFiltered := True;
   if Active then
@@ -1642,7 +1661,7 @@ begin
     begin
       FieldValue := FData.GetARowItem(I, FieldIndex);
       if (Length(FieldValue) > 0) = NullFlag then
-        PRow^.Filtered := True;
+        SetRowFiltered(PRow, True);
     end;
   end;
   FIsFiltered := True;
@@ -1695,10 +1714,10 @@ begin
           // Inc(stillVisible)   // count the number that are still visible.
         end
         else
-          PRow^.Filtered := True
+          SetRowFiltered(PRow, True)
       except
         on E: EConvertError do
-          PRow^.Filtered := True; // hide error rows.
+          SetRowFiltered(PRow, True); // hide error rows.
       end;
     end;{if not already hidden!}
   end;{ for loop}
@@ -1735,7 +1754,7 @@ begin
       if ValueLen = 0 then
       begin
         if FieldValue <> '' then // if not empty, hide row.
-          PRow^.Filtered := True;
+          SetRowFiltered(PRow, True);
       end
       else
       begin
@@ -1746,7 +1765,7 @@ begin
           // Inc(stillVisible)   // count the number that are still visible.
         end
         else
-          PRow^.Filtered := True
+          SetRowFiltered(PRow, True);
       end;
     end
   end;
@@ -1775,7 +1794,7 @@ begin
   begin
     PRow := PCsvRow(FData[I]);
     if Assigned(PRow) then
-      PRow^.Filtered := False; // clear all filter bits.
+      SetRowFiltered(PRow, False); // clear all filter bits.
   end;
   FIsFiltered := False;
 end;
@@ -2054,8 +2073,8 @@ end;
 
 
 // XXX TODO: REMOVE HARD CODED LIMIT OF 20 FIELDS SEARCHABLE!!!
-function TJvCustomCsvDataSet.Locate(const KeyFields: string; const KeyValues: Variant;
-  Options: TLocateOptions): Boolean; // override;
+function TJvCustomCsvDataSet.LocateRecord(const KeyFields: string; const KeyValues: Variant; Options: TLocateOptions):
+    Boolean;
   // Options is    [loCaseInsensitive]
   //              or [loPartialKey]
   //              or [loPartialKey,loCaseInsensitive]
@@ -2425,6 +2444,8 @@ begin
     if AnsiChar(PDestination[0]) <> #0 then
       Move(Buffer^, PDestination[1], Field.DataSize);
     //Result := True; {there is no return value, oops}
+    // Notify controls of a field change:
+    DataEvent(deFieldChange, Longint(Field));
     Exit;
   end;
 
@@ -3695,11 +3716,12 @@ begin
   else
     FOpenFileName := '';
 
-  InternalInitFieldDefs; // initialize FieldDef objects.
-
     // Create TField components when no persistent fields have been created
   if DefaultFields then
-    CreateFields;
+    CreateFields  // InternalInitFieldDefs is called inside
+  else
+    InternalInitFieldDefs; // initialize FieldDef objects.
+
   BindFields(True); // bind FieldDefs to actual Data
 
   if FCsvColumns.Count > 1 then
@@ -3859,7 +3881,7 @@ end;
 function TJvCustomCsvDataSet.GetRecordCount: Integer;
 begin
   if FData.Count > 0 then
-    Result := FData.Count
+    Result := FData.Count - FData.FilteredCount
   else
     Result := 0;
 end;
@@ -4042,7 +4064,7 @@ procedure TJvCustomCsvDataSet.QuickSort(AList: TList; const SortColumns: TArrayO
   ACount: Integer; const SortAscending: array of Boolean);
 begin
   if (AList <> nil) and (AList.Count > 1) then
-    InternalQuickSort(AList.List, 0, AList.Count - 1, SortColumns, ACount, SortAscending);
+    InternalQuickSort({$IFDEF RTL230_UP}@{$ENDIF RTL230_UP}AList.List, 0, AList.Count - 1, SortColumns, ACount, SortAscending);
 end;
 
 procedure TJvCustomCsvDataSet.Sort(const SortFields: string; Ascending: Boolean);
@@ -4167,6 +4189,18 @@ end;
 
 { CsvRows: dynamic array of pointers }
 
+constructor TJvCsvRows.Create;
+begin
+  FTextBufferSize := JvCsvDefaultTextBufferSize;
+  FMarginSize := JvCsvDefaultMarginSize;
+
+{ DecimalSeparator:
+  This 'US' constant value is important for backwards compatibility.
+  DO NOT CHANGE this default, it would break people's code.
+}
+  FDecimalSeparator := USDecimalSeparator;
+end;
+
 function TJvCsvRows.GetUserTag(Index: Integer): Integer;
 begin
   if (Index < 0) or (Index >= FUserLength) then
@@ -4188,7 +4222,6 @@ begin
   end;
   FUserTag[Index] := Value;
 end;
-
 
 function TJvCsvRows.GetUserData(Index: Integer): Pointer;
 begin
@@ -4214,11 +4247,15 @@ end;
 procedure TJvCsvRows.AddRow(Item: PCsvRow);
 begin
   Add(Pointer(Item));
+  if Item.Filtered then
+    Inc(FFilteredCount);
 end;
 
 procedure TJvCsvRows.InsertRow(const Position: Integer; Item: PCsvRow);
 begin
   Insert(Position, Pointer(Item));
+  if Item.Filtered then
+    Inc(FFilteredCount);
 end;
 
 procedure TJvCsvRows.InternalInitRecord(Buffer: TJvRecordBuffer);
@@ -4293,7 +4330,9 @@ var
 begin
   if (RowIndex >= 0) and (RowIndex < Count) then
   begin
-    P := Self[RowIndex];
+    if PCsvRow(List{$IFNDEF RTL230_UP}^{$ENDIF !RTL230_UP}[RowIndex]).Filtered then
+      Dec(FFilteredCount);
+    P := Items[RowIndex];
     if P <> nil then
       FreeMem(P);
   end;
@@ -4316,19 +4355,8 @@ var
 begin
   for I := 0 to Count - 1 do
     FreeMem(Items[I]);
+  FFilteredCount := 0;
   inherited Clear;
-end;
-
-constructor TJvCsvRows.Create;
-begin
-  FTextBufferSize := JvCsvDefaultTextBufferSize;
-  FMarginSize := JvCsvDefaultMarginSize;
-
-{ DecimalSeparator:
-  This 'US' constant value is important for backwards compatibility.
-  DO NOT CHANGE this default, it would break people's code.
-}
-  FDecimalSeparator := USDecimalSeparator;
 end;
 
 { Call this one first, then AssignFromStrings on subsequent updates only.}
@@ -5584,6 +5612,12 @@ begin
   end;
 end;
 
+procedure TJvCustomCsvDataSet.CreateFields;
+begin
+  InternalInitFieldDefs;
+  inherited CreateFields;
+end;
+
 //-------------------------------------------------------------------------
 //DeleteCsvColumn
 //
@@ -5689,6 +5723,26 @@ begin
   finally
     FreeMem(PTempRow);
   end;
+end;
+
+function TJvCustomCsvDataSet.Locate(const KeyFields: string; const KeyValues: Variant; Options: TLocateOptions):
+    Boolean;
+begin
+  DoBeforeScroll;
+  Result := LocateRecord(KeyFields, KeyValues, Options);
+  if Result then
+  begin
+    Resync([rmExact, rmCenter]);
+    DoAfterScroll;
+  end;
+end;
+
+function TJvCustomCsvDataSet.Lookup(const KeyFields: string; const KeyValues: Variant;
+  const ResultFields: string): Variant;
+begin
+  Result := Null;
+  if LocateRecord(KeyFields, KeyValues, []) then
+    Result := FieldValues[ResultFields];
 end;
 
 {$IFDEF UNITVERSIONING}

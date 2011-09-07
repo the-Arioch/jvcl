@@ -47,8 +47,7 @@ type
   TJvBaseParameterClass = class of TJvBaseParameter;
   TJvParameterListClass = class of TJvParameterList;
 
-  TJvParameterListEvent = procedure(const ParameterList: TJvParameterList; const Parameter:
-    TJvBaseParameter) of object;
+  TJvParameterListEvent = procedure(const ParameterList: TJvParameterList; const Parameter: TJvBaseParameter) of object;
 
   TJvParameterOnValidateData = procedure (const Data : Variant; var Msg : String; var Valid : Boolean) of Object;
 
@@ -217,8 +216,7 @@ type
      this value must be defined before inserting into the parameterlist }
     property SearchName: string read FSearchName write SetSearchName;
     {should this value be saved by the parameterlist }
-    property StoreValueToAppStorage: Boolean read FStoreValueToAppStorage write
-      FStoreValueToAppStorage;
+    property StoreValueToAppStorage: Boolean read FStoreValueToAppStorage write FStoreValueToAppStorage;
     {should this value be crypted before save }
     property StoreValueCrypted: Boolean read FStoreValueCrypted write FStoreValueCrypted;
     {the searchname of the parentparameter. The parentparameter must be a
@@ -242,10 +240,8 @@ type
     property DisableReasons: TJvParameterListEnableDisableReasonList read FDisableReasons;
     property EnableReasons: TJvParameterListEnableDisableReasonList read FEnableReasons;
     /// Use this event to implement a custom logic to validate the parameter contents
-    property OnValidateData: TJvParameterOnValidateData read FOnValidateData write
-        FOnValidateData;
-    property OnEnterParameter: TJvParameterListEvent read FOnEnterParameter write
-      FOnEnterParameter;
+    property OnValidateData: TJvParameterOnValidateData read FOnValidateData write FOnValidateData;
+    property OnEnterParameter: TJvParameterListEvent read FOnEnterParameter write FOnEnterParameter;
     property OnExitParameter: TJvParameterListEvent read FOnExitParameter write FOnExitParameter;
   end;
 
@@ -316,8 +312,8 @@ type
     HistoryPanel: TWinControl;
     BottomPanel: TWinControl;
     ButtonPanel: TWinControl;
-    OrgButtonPanelWidth,
-      OrgHistoryPanelWidth: Integer;
+    OrgButtonPanelWidth: Integer;
+    OrgHistoryPanelWidth: Integer;
     procedure SetArrangeSettings(Value: TJvArrangeSettings);
     procedure SetAppStoragePath(const Value: string);
     function GetAppStoragePath: string;
@@ -340,8 +336,8 @@ type
     procedure HistoryLoadClick(Sender: TObject);
     procedure HistorySaveClick(Sender: TObject);
     procedure HistoryClearClick(Sender: TObject);
-    function GetEnableDisableReasonState(ADisableReasons: TJvParameterListEnableDisableReasonList;
-      AEnableReasons: TJvParameterListEnableDisableReasonList): Integer;
+    function GetEnableDisableReasonState(ADisableReasons: TJvParameterListEnableDisableReasonList; AEnableReasons:
+        TJvParameterListEnableDisableReasonList): Integer;
     procedure DialogShow(Sender: TObject);
     {this procedure checks the autoscroll-property of the internal
      scrollbox. This function should only be called, after the size of
@@ -398,12 +394,10 @@ type
     { Property to get access to the parameters }
     property Parameters[Index: Integer]: TJvBaseParameter read GetParameters write SetParameters;
     // Enable/DisableReason for the OkButton
-    property OkButtonDisableReasons: TJvParameterListEnableDisableReasonList read
-      FOkButtonDisableReasons write
-      FOkButtonDisableReasons;
-    property OkButtonEnableReasons: TJvParameterListEnableDisableReasonList read
-      FOkButtonEnableReasons write
-      FOkButtonEnableReasons;
+    property OkButtonDisableReasons: TJvParameterListEnableDisableReasonList
+        read FOkButtonDisableReasons write FOkButtonDisableReasons;
+    property OkButtonEnableReasons: TJvParameterListEnableDisableReasonList
+        read FOkButtonEnableReasons write FOkButtonEnableReasons;
     //1 Number of visible parameters
     property VisibleCount: Integer read GetVisibleCount;
     procedure AssignValues(iSourceList: TJvParameterList);
@@ -414,8 +408,7 @@ type
     procedure CreateWinControlsOnWinControl(ParameterParent: TWinControl);
     {
     Checks the IsDataValid of each Parameter, When the ShowParameterValidStatus is
-    activated the
-    labels invalid parameters will be shown italic
+    activated the labels invalid parameters will be shown italic
     }
     procedure HandleShowValidState;
     { load the data of all allowed parameters from the AppStorage }
@@ -440,42 +433,41 @@ type
     property MaxWidth: Integer read FMaxWidth write FMaxWidth default 400;
     {Maximum ClientHeight of the Dialog}
     property MaxHeight: Integer read FMaxHeight write FMaxHeight default 600;
-    property DefaultParameterHeight: Integer read FDefaultParameterHeight write
-      FDefaultParameterHeight default 0;
-    property DefaultParameterWidth: Integer read FDefaultParameterWidth write FDefaultParameterWidth
-      default 0;
-    property DefaultParameterLabelWidth: Integer read FDefaultParameterLabelWidth write
-      FDefaultParameterLabelWidth default 0;
+    property DefaultParameterHeight: Integer read FDefaultParameterHeight write FDefaultParameterHeight default 0;
+    property DefaultParameterWidth: Integer read FDefaultParameterWidth write FDefaultParameterWidth default 0;
+    property DefaultParameterLabelWidth: Integer read FDefaultParameterLabelWidth write FDefaultParameterLabelWidth default
+        0;
     property OkButtonVisible: Boolean read FOkButtonVisible write FOkButtonVisible;
     property CancelButtonVisible: Boolean read FCancelButtonVisible write FCancelButtonVisible;
     property HistoryEnabled: Boolean read FHistoryEnabled write FHistoryEnabled;
     property LastHistoryName: string read FLastHistoryName write FLastHistoryName;
     property AppStorage: TJvCustomAppStorage read GetAppStorage write SetAppStorage;
     /// Show the state of each invalid parameter by drawing the label italic
-    property ShowParameterValidState: Boolean read FShowParameterValidState write
-        FShowParameterValidState default False;
-    property OnChangeParameter: TNotifyEvent read FOnChangeParameter write
-      FOnChangeParameter;
-    property OnEnterParameter: TNotifyEvent read FOnEnterParameter write
-      FOnEnterParameter;
-    property OnExitParameter: TNotifyEvent read FOnExitParameter write
-      FOnExitParameter;
+    property ShowParameterValidState: Boolean read FShowParameterValidState write FShowParameterValidState default False;
+    property OnChangeParameter: TNotifyEvent read FOnChangeParameter write FOnChangeParameter;
+    property OnEnterParameter: TNotifyEvent read FOnEnterParameter write FOnEnterParameter;
+    property OnExitParameter: TNotifyEvent read FOnExitParameter write FOnExitParameter;
   end;
 
-  TJvParameterListSelectList = class(TJvAppStorageSelectList)
+  TJvParameterListSelectList = class(TJvBaseAppStorageSelectList)
   private
     FParameterList: TJvParameterList;
   protected
-    function GetDynControlEngine: TJvDynControlEngine; override;
+    function CreateSelectListDialogInstance(AOwner: TComponent;AOperation: TJvAppStorageSelectListOperation; ACaption:
+        string = ''): TJvBaseAppStorageSelectListDialogInstance; override;
     procedure SetParameterList(Value: TJvParameterList); virtual;
     function GetAppStorage: TJvCustomAppStorage; override;
+    function GetStoragePath: string; override;
     procedure SetAppStorage(Value: TJvCustomAppStorage); override;
   public
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure RestoreParameterList(const ACaption: string = '');
     procedure SaveParameterList(const ACaption: string = '');
   published
+    property CheckEntries;
     property ParameterList: TJvParameterList read FParameterList write SetParameterList;
+    property SelectListDialog;
+    property SelectPath;
   end;
 
   TJvParameterListPropertyStore = class(TJvCustomPropertyStore)
@@ -505,7 +497,7 @@ implementation
 
 uses
   JclStrings,
-  JvParameterListParameter, JvResources, JvJVCLUtils;
+  JvParameterListParameter, JvResources, JvJVCLUtils, JclSysUtils;
 
 const
   cFalse = 'FALSE';
@@ -673,9 +665,7 @@ begin
   inherited Clear;
 end;
 
-procedure TJvParameterListEnableDisableReasonList.AddReasonVariant(const RemoteParameterName:
-  string;
-  Value: Variant);
+procedure TJvParameterListEnableDisableReasonList.AddReasonVariant(const RemoteParameterName: string; Value: Variant);
 var
   Reason: TJvParameterListEnableDisableReason;
 begin
@@ -685,8 +675,7 @@ begin
   AddObject(RemoteParameterName, Reason);
 end;
 
-procedure TJvParameterListEnableDisableReasonList.AddReason(const RemoteParameterName: string;
-  Value: Boolean);
+procedure TJvParameterListEnableDisableReasonList.AddReason(const RemoteParameterName: string; Value: Boolean);
 var
   Reason: TJvParameterListEnableDisableReason;
 begin
@@ -696,8 +685,7 @@ begin
   AddObject(RemoteParameterName, Reason);
 end;
 
-procedure TJvParameterListEnableDisableReasonList.AddReason(const RemoteParameterName: string;
-  Value: Integer);
+procedure TJvParameterListEnableDisableReasonList.AddReason(const RemoteParameterName: string; Value: Integer);
 var
   Reason: TJvParameterListEnableDisableReason;
 begin
@@ -707,8 +695,7 @@ begin
   AddObject(RemoteParameterName, Reason);
 end;
 
-procedure TJvParameterListEnableDisableReasonList.AddReason(const RemoteParameterName: string;
-  Value: Double);
+procedure TJvParameterListEnableDisableReasonList.AddReason(const RemoteParameterName: string; Value: Double);
 var
   Reason: TJvParameterListEnableDisableReason;
 begin
@@ -718,8 +705,7 @@ begin
   AddObject(RemoteParameterName, Reason);
 end;
 
-procedure TJvParameterListEnableDisableReasonList.AddReason(const RemoteParameterName: string;
-  const Value: string);
+procedure TJvParameterListEnableDisableReasonList.AddReason(const RemoteParameterName: string; const Value: string);
 var
   Reason: TJvParameterListEnableDisableReason;
 begin
@@ -729,8 +715,7 @@ begin
   AddObject(RemoteParameterName, Reason);
 end;
 
-procedure TJvParameterListEnableDisableReasonList.AddReason(const RemoteParameterName: string;
-  Value: TDateTime);
+procedure TJvParameterListEnableDisableReasonList.AddReason(const RemoteParameterName: string; Value: TDateTime);
 var
   Reason: TJvParameterListEnableDisableReason;
 begin
@@ -740,8 +725,7 @@ begin
   AddObject(RemoteParameterName, Reason);
 end;
 
-procedure TJvParameterListEnableDisableReasonList.AddReasonIsEmpty(const RemoteParameterName:
-  string);
+procedure TJvParameterListEnableDisableReasonList.AddReasonIsEmpty(const RemoteParameterName: string);
 var
   Reason: TJvParameterListEnableDisableReason;
 begin
@@ -751,8 +735,7 @@ begin
   AddObject(RemoteParameterName, Reason);
 end;
 
-procedure TJvParameterListEnableDisableReasonList.AddReasonIsNotEmpty(const RemoteParameterName:
-  string);
+procedure TJvParameterListEnableDisableReasonList.AddReasonIsNotEmpty(const RemoteParameterName: string);
 var
   Reason: TJvParameterListEnableDisableReason;
 begin
@@ -837,7 +820,7 @@ end;
 
 function TJvBaseParameter.GetAsString: string;
 begin
-  if VarIsNull(AsVariant) then
+  if VarIsNullEmpty(AsVariant) then
     Result := ''
   else
     Result := AsVariant;
@@ -863,7 +846,7 @@ end;
 
 function TJvBaseParameter.GetAsInteger: Integer;
 begin
-  if VarIsNull(AsVariant) then
+  if VarIsNullEmpty(AsVariant) then
     Result := 0
   else
     Result := AsVariant;
@@ -881,7 +864,7 @@ function TJvBaseParameter.GetAsBoolean: Boolean;
 var
   S: string;
 begin
-  if VarIsNull(FValue) then
+  if VarIsNullEmpty(FValue) then
     Result := False
   else
   begin
@@ -897,7 +880,7 @@ end;
 
 function TJvBaseParameter.GetAsDate: TDateTime;
 begin
-  if VarIsNull(FValue) then
+  if VarIsNullEmpty(FValue) then
     Result := 0
   else
     Result := VarToDateTime(FValue);
@@ -1138,8 +1121,7 @@ begin
     Result := IsDataValid(AData, Msg);
 end;
 
-function TJvBaseParameter.IsDataValid(const AData: Variant; var vMsg: String):
-    Boolean;
+function TJvBaseParameter.IsDataValid(const AData: Variant; var vMsg: String): Boolean;
 begin
   if not Required or not Enabled then
     Result := True
@@ -1430,6 +1412,7 @@ begin
   TForm(ParameterDialog).BorderStyle := bsDialog;
   TForm(ParameterDialog).FormStyle := fsNormal;
   TForm(ParameterDialog).Position := poScreenCenter;
+  TForm(ParameterDialog).ShowHint := True;
   TForm(ParameterDialog).OnShow := DialogShow;
 
   if Height > 0 then
@@ -1437,14 +1420,12 @@ begin
   if Width > 0 then
     ParameterDialog.Width := Width;
 
-  BottomPanel := DynControlEngine.CreatePanelControl(Self, ParameterDialog, 'BottomPanel', '',
-    alBottom);
+  BottomPanel := DynControlEngine.CreatePanelControl(Self, ParameterDialog, 'BottomPanel', '', alBottom);
   if not Supports(BottomPanel, IJvDynControlPanel, ITmpPanel) then
     raise EIntfCastError.CreateRes(@RsEIntfCastError);
   ITmpPanel.ControlSetBorder(bvNone, bvRaised, 1, bsNone, 0);
 
-  MainPanel := DynControlEngine.CreatePanelControl(Self, ParameterDialog, 'MainPanel', '',
-    alClient);
+  MainPanel := DynControlEngine.CreatePanelControl(Self, ParameterDialog, 'MainPanel', '', alClient);
   if not Supports(MainPanel, IJvDynControlPanel, ITmpPanel) then
     raise EIntfCastError.CreateRes(@RsEIntfCastError);
   ITmpPanel.ControlSetBorder(bvNone, bvRaised, 1, bsNone, 3);
@@ -1532,8 +1513,7 @@ begin
   ResizeDialogAfterArrange(nil, MainPanel.Left, MainPanel.Top, MainPanel.Width, MainPanel.Height);
 end;
 
-procedure TJvParameterList.ResizeDialogAfterArrange(Sender: TObject; nLeft, nTop, nWidth, nHeight:
-  Integer);
+procedure TJvParameterList.ResizeDialogAfterArrange(Sender: TObject; nLeft, nTop, nWidth, nHeight: Integer);
 begin
   if Assigned(ParameterDialog) then
   begin
@@ -1641,8 +1621,7 @@ begin
   end;
 end;
 
-function TJvParameterList.GetParentByName(MainParent: TWinControl; const ASearchName: string):
-  TWinControl;
+function TJvParameterList.GetParentByName(MainParent: TWinControl; const ASearchName: string): TWinControl;
 var
   Parameter: TJvBaseParameter;
   I: Integer;
@@ -1702,9 +1681,8 @@ begin
         end;
 end;
 
-function TJvParameterList.GetEnableDisableReasonState(ADisableReasons:
-  TJvParameterListEnableDisableReasonList;
-  AEnableReasons: TJvParameterListEnableDisableReasonList): Integer;
+function TJvParameterList.GetEnableDisableReasonState(ADisableReasons: TJvParameterListEnableDisableReasonList;
+    AEnableReasons: TJvParameterListEnableDisableReasonList): Integer;
 var
   J: Integer;
   IEnable: Integer;
@@ -1720,7 +1698,7 @@ begin
       Reason := TJvParameterListEnableDisableReason(AEnableReasons.Objects[J]);
       if not Assigned(Reason) then
         Continue;
-      if VarIsNull(Reason.AsVariant) then
+      if VarIsNullEmpty(Reason.AsVariant) then
         Continue;
       SearchParameter := ParameterByName(Reason.RemoteParameterName);
       if not Assigned(SearchParameter) then
@@ -1748,7 +1726,7 @@ begin
       Reason := TJvParameterListEnableDisableReason(ADisableReasons.Objects[J]);
       if not Assigned(Reason) then
         Continue;
-      if VarIsNull(Reason.AsVariant) then
+      if VarIsNullEmpty(Reason.AsVariant) then
         Continue;
       SearchParameter := ParameterByName(Reason.RemoteParameterName);
       if not Assigned(SearchParameter) then
@@ -1756,9 +1734,9 @@ begin
       if not Assigned(SearchParameter.WinControl) then
         Continue;
       Data := SearchParameter.GetWinControlData;
-      if (VarIsEmpty(Data) or (VarToStr(Data) = '')) and Reason.IsEmpty then
+      if VarIsNullEmptyBlank(Data) and Reason.IsEmpty then
         IEnable := -1;
-      if (not (VarIsEmpty(Data) or (VarToStr(Data) = ''))) and Reason.IsNotEmpty then
+      if not VarIsNullEmptyBlank(Data) and Reason.IsNotEmpty then
         IEnable := -1;
       try
         if VarCompareValue(Reason.AsVariant, Data) = vrEqual then
@@ -1840,8 +1818,7 @@ begin
   CreateWinControlsOnWinControl(ArrangePanel);
 end;
 
-procedure TJvParameterList.CreateWinControlsOnWinControl(ParameterParent:
-    TWinControl);
+procedure TJvParameterList.CreateWinControlsOnWinControl(ParameterParent: TWinControl);
 var
   I: Integer;
   BeforeAfterParameterNames : TStringList;
@@ -2133,25 +2110,32 @@ var
   I: Integer;
 begin
   if Assigned(AppStorage) And Assigned(ParameterList) then
-    for I := 0 to ParameterList.Count - 1 do
-      if not (ParameterList.Parameters[I] is TJvNoDataParameter) then
-        if ParameterList.Parameters[I].StoreValueToAppStorage then
-        begin
-          if ParameterList.Parameters[I].StoreValueCrypted then
-            AppStorage.EnablePropertyValueCrypt;
-          if (ParameterList.Parameters[I] is TJvListParameter)
-              and (TJvListParameter(ParameterList.Parameters[I]).VariantAsItemIndex) then
-            TJvListParameter(ParameterList.Parameters[I]).ItemIndex :=
-              AppStorage.ReadInteger(AppStorage.ConcatPaths([AppStoragePath,
-                  ParameterList.Parameters[I].SearchName]),
-                  TJvListParameter(ParameterList.Parameters[I]).ItemIndex)
-          else
-            ParameterList.Parameters[I].AsString := AppStorage.ReadString(AppStorage.ConcatPaths([AppStoragePath,
-              ParameterList.Parameters[I].SearchName]),
-              ParameterList.Parameters[I].AsString);
-          if ParameterList.Parameters[I].StoreValueCrypted then
-            AppStorage.DisablePropertyValueCrypt;
-        end;
+  begin
+    AppStorage.BeginUpdate;
+    try
+      for I := 0 to ParameterList.Count - 1 do
+        if not (ParameterList.Parameters[I] is TJvNoDataParameter) then
+          if ParameterList.Parameters[I].StoreValueToAppStorage then
+          begin
+            if ParameterList.Parameters[I].StoreValueCrypted then
+              AppStorage.EnablePropertyValueCrypt;
+            if (ParameterList.Parameters[I] is TJvListParameter)
+                and (TJvListParameter(ParameterList.Parameters[I]).VariantAsItemIndex) then
+              TJvListParameter(ParameterList.Parameters[I]).ItemIndex :=
+                AppStorage.ReadInteger(AppStorage.ConcatPaths([AppStoragePath,
+                    ParameterList.Parameters[I].SearchName]),
+                    TJvListParameter(ParameterList.Parameters[I]).ItemIndex)
+            else
+              ParameterList.Parameters[I].AsString := AppStorage.ReadString(AppStorage.ConcatPaths([AppStoragePath,
+                ParameterList.Parameters[I].SearchName]),
+                ParameterList.Parameters[I].AsString);
+            if ParameterList.Parameters[I].StoreValueCrypted then
+              AppStorage.DisablePropertyValueCrypt;
+          end;
+    finally
+      AppStorage.EndUpdate;
+    end;
+  end;
 end;
 
 procedure TJvParameterListPropertyStore.Notification(AComponent: TComponent; Operation: TOperation);
@@ -2170,30 +2154,38 @@ procedure TJvParameterListPropertyStore.StoreData;
 var
   I: Integer;
 begin
-  if Assigned(AppStorage) then
-    for I := 0 to ParameterList.Count - 1 do
-      if not (ParameterList.Parameters[I] is TJvNoDataParameter) then
-        if ParameterList.Parameters[I].StoreValueToAppStorage then
-        begin
-          if ParameterList.Parameters[I].StoreValueCrypted then
-            AppStorage.EnablePropertyValueCrypt;
-          if (ParameterList.Parameters[I] is TJvListParameter)
-             and (TJvListParameter(ParameterList.Parameters[I]).VariantAsItemIndex) then
-            AppStorage.WriteInteger(AppStorage.ConcatPaths([AppStoragePath, ParameterList.Parameters[I].SearchName]),
-              TJvListParameter(ParameterList.Parameters[I]).ItemIndex)
-          else
-            AppStorage.WriteString(AppStorage.ConcatPaths([AppStoragePath, ParameterList.Parameters[I].SearchName]),
-              ParameterList.Parameters[I].AsString);
-          if ParameterList.Parameters[I].StoreValueCrypted then
-            AppStorage.DisablePropertyValueCrypt;
-        end;
+  if Assigned(AppStorage) And Assigned(ParameterList) then
+  begin
+    AppStorage.BeginUpdate;
+    try
+      for I := 0 to ParameterList.Count - 1 do
+        if not (ParameterList.Parameters[I] is TJvNoDataParameter) then
+          if ParameterList.Parameters[I].StoreValueToAppStorage then
+          begin
+            if ParameterList.Parameters[I].StoreValueCrypted then
+              AppStorage.EnablePropertyValueCrypt;
+            if (ParameterList.Parameters[I] is TJvListParameter)
+               and (TJvListParameter(ParameterList.Parameters[I]).VariantAsItemIndex) then
+              AppStorage.WriteInteger(AppStorage.ConcatPaths([AppStoragePath, ParameterList.Parameters[I].SearchName]),
+                TJvListParameter(ParameterList.Parameters[I]).ItemIndex)
+            else
+              AppStorage.WriteString(AppStorage.ConcatPaths([AppStoragePath, ParameterList.Parameters[I].SearchName]),
+                ParameterList.Parameters[I].AsString);
+            if ParameterList.Parameters[I].StoreValueCrypted then
+              AppStorage.DisablePropertyValueCrypt;
+          end;
+    finally
+      AppStorage.EndUpdate;
+    end;
+  end;
 end;
 
-//=== { TJvParameterListSelectList } =========================================
-
-function TJvParameterListSelectList.GetDynControlEngine: TJvDynControlEngine;
+function TJvParameterListSelectList.CreateSelectListDialogInstance(AOwner: TComponent;AOperation:
+    TJvAppStorageSelectListOperation; ACaption: string = ''): TJvBaseAppStorageSelectListDialogInstance;
 begin
-  Result := FParameterList.DynControlEngine;
+  Result := inherited CreateSelectListDialogInstance(AOwner, AOperation, ACaption);
+  if not Assigned(SelectListDialog) then
+    Result.DynControlEngine := FParameterList.DynControlEngine;
 end;
 
 procedure TJvParameterListSelectList.SetParameterList(Value: TJvParameterList);
@@ -2207,6 +2199,14 @@ begin
     Result := FParameterList.AppStorage
   else
     Result := nil;
+end;
+
+function TJvParameterListSelectList.GetStoragePath: string;
+begin
+  if Assigned(AppStorage) then
+    Result := AppStorage.ConcatPaths([ParameterList.AppStoragePath, SelectPath])
+  else
+    Result := ParameterList.AppStoragePath + PathDelim + SelectPath;
 end;
 
 procedure TJvParameterListSelectList.SetAppStorage(Value: TJvCustomAppStorage);

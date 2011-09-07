@@ -39,7 +39,7 @@ uses
   {$ENDIF MSWINDOWS}
   SysUtils, Classes, IniFiles, Messages, Controls, Forms, StdCtrls, ExtCtrls,
   Dialogs, Buttons,
-  Jpeg,
+  jpeg,
   JclSysInfo,
   JVCLVer, JvBaseDlg, JvComponent;
 
@@ -90,6 +90,9 @@ type
     class function Execute(StoreSettings: Boolean): Boolean;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvJVCLAboutComponent = class(TJvCommonDialogP)
   private
     FStoreSettings: Boolean;

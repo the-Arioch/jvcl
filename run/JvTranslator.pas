@@ -36,9 +36,12 @@ uses
   SysUtils, Classes, IniFiles,
   Forms, ComCtrls, Menus, Dialogs,
   JvSimpleXml, JvComponentBase,
-  JclSimpleXML;
+  JclSimpleXml;
 
 type
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvTranslator = class(TJvComponent)
   private
     FXML: TJvSimpleXml;
@@ -105,6 +108,9 @@ type
     property XML: TJvSimpleXml read FXML;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvTranslatorStrings = class(TJvComponent)
   private
     FList: THashedStringList;

@@ -38,7 +38,7 @@ uses
   {$ENDIF UNITVERSIONING}
   SysUtils, Classes,
   Windows, Controls, Forms, ExtCtrls,
-  JvHTControls, JvTypes;
+  JvHtControls, JvTypes;
 
 type
   TJvHintWindow = class(THintWindow)
@@ -49,6 +49,9 @@ type
 
   TJvHintState = (tmBeginShow, tmShowing, tmStopped);
   
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvHint = class(TComponent)
   private
     FAutoHide: Boolean;

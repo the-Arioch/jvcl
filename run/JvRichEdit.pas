@@ -49,7 +49,7 @@ uses
   Windows, ActiveX, ComObj, CommCtrl, Messages, SysUtils, Classes, Controls,
   OleCtnrs,
   Forms, Graphics, StdCtrls, Dialogs, RichEdit, Menus, ComCtrls, SyncObjs,
-  JVCLVer, JvExStdCtrls;
+  JVCLVer, JvExStdCtrls, JvTypes;
 
 type
   TJvCustomRichEdit = class;
@@ -641,6 +641,9 @@ type
     procedure CreateWnd; override;
     procedure DestroyWnd; override;
     function GetPopupMenu: TPopupMenu; override;
+    {$IFDEF RTL220_UP}
+    procedure DoContextPopup(MousePos: TPoint; var Handled: Boolean); override;
+    {$ENDIF RTL220_UP}
     procedure TextNotFound(Dialog: TFindDialog); virtual;
     procedure RequestSize(const Rect: TRect); virtual;
     procedure SelectionChange; dynamic;
@@ -785,6 +788,9 @@ type
     property SelectionType: TRichSelectionType read GetSelectionType;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvRichEdit = class(TJvCustomRichEdit)
   published
     property AdvancedTypography;
@@ -849,7 +855,7 @@ type
     property WordWrap;
     property Zoom; // added by J.G. Boerema
     property OnChange;
-	property OnClick;
+    property OnClick;
     property OnDblClick;
     property OnDragDrop;
     property OnDragOver;
@@ -940,7 +946,7 @@ uses
   {$IFDEF RTL200_UP}
   CommDlg,
   {$ENDIF RTL200_UP}
-  JvThemes, JvConsts, JvResources, JvFixedEditPopUp, JvTypes;
+  JvThemes, JvConsts, JvResources, JvFixedEditPopUp;
 
 type
   PENLink = ^TENLink;
@@ -1155,7 +1161,7 @@ type
     property Mode: TRichStreamModes read FMode write FMode;
   end;
 
-  TMSTextConversionThread = class(TThread)
+  TMSTextConversionThread = class(TJvCustomThread)
   protected
     procedure Execute; override;
   public
@@ -2567,12 +2573,9 @@ var
 begin
   if Dialog.Handle = 0 then
     Exit;
-  with TextRect do
-  begin
-    TopLeft := ClientToScreen(GetCharPos(SelStart));
-    BottomRight := ClientToScreen(GetCharPos(SelStart + SelLength));
-    Inc(Bottom, 20);
-  end;
+  TextRect.TopLeft := ClientToScreen(GetCharPos(SelStart));
+  TextRect.BottomRight := ClientToScreen(GetCharPos(SelStart + SelLength));
+  Inc(TextRect.Bottom, 20);
   with Dialog do
   begin
     GetWindowRect(Handle, R);
@@ -3257,6 +3260,18 @@ begin
   if (Result = nil) and UseFixedPopup then
     Result := FixedDefaultEditPopUp(Self);
 end;
+
+{$IFDEF RTL220_UP}
+procedure TJvCustomRichEdit.DoContextPopup(MousePos: TPoint; var Handled: Boolean);
+begin
+  if not Assigned(PopupMenu) then
+  begin
+    MousePos := ClientToScreen(MousePos);
+    FixedDefaultEditPopUp(Self).Popup(MousePos.X, MousePos.Y);
+    Handled := True;
+  end;
+end;
+{$ENDIF RTL220_UP}
 
 function TJvCustomRichEdit.GetRedoName: TUndoName;
 begin
@@ -4517,8 +4532,8 @@ begin
   begin
     if GetUpdateRect(Handle, R, True) then
     begin
-      with ClientRect do
-        R1 := Rect(Right - 3, Top, Right, Bottom);
+      R1 := ClientRect;
+      R1.Left := R.Right - 3;
       if IntersectRect(R, R, R1) then
         InvalidateRect(Handle, @R1, True);
     end;
@@ -4540,8 +4555,8 @@ procedure TJvCustomRichEdit.WMRButtonUp(var Msg: TMessage);
 begin
   { RichEd20 does not pass the WM_RBUTTONUP message to defwndproc, }
   { so we get no WM_CONTEXTMENU message. Simulate message here.    }
-  if ((RichEditVersion <> 1) or (Win32MajorVersion < 5)) and AllowObjects then
-    Perform(WM_CONTEXTMENU, Handle, LPARAM(PointToSmallPoint(
+  if ((RichEditVersion <> 1) or not CheckWin32Version(5, 0)) and AllowObjects then
+    Perform(WM_CONTEXTMENU, Handle, {$IFDEF RTL230_UP}PointToLParam{$ELSE}LPARAM{$ENDIF RTL230_UP}(PointToSmallPoint(
       ClientToScreen(SmallPointToPoint(TWMMouse(Msg).Pos)))));
   inherited;
 end;
@@ -7150,6 +7165,7 @@ end;
 
 procedure TMSTextConversionThread.Execute;
 begin
+  NameThread(ThreadName);
   if GCurrentConverter <> nil then
     GCurrentConverter.DoConversion;
 end;
@@ -7212,7 +7228,7 @@ end;
 function TOleUILinkInfo.GetNextLink(dwLink: Longint): Longint;
 begin
   if dwLink = 0 then
-    Result := Longint(FRichEdit)
+    Result := 1
   else
     Result := 0;
 end;

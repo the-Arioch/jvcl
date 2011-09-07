@@ -138,6 +138,9 @@ type
     ARect: TRect) of object;
 }
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDesignSurface = class(TComponent)
   private
     FActive: Boolean;
@@ -223,11 +226,17 @@ type
     property OnSelectionChange: TNotifyEvent read FOnSelectionChange write FOnSelectionChange;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDesignScrollBox = class(TScrollBox)
   protected
     procedure AutoScrollInView(AControl: TControl); override;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvDesignPanel = class(TPanel)
   private
     FSurface: TJvDesignSurface;
@@ -608,10 +617,10 @@ end;
 
 function TJvDesignSurface.GetAddBounds: TRect;
 begin
-  with Result, Controller do
+  with Controller do
   begin
-    TopLeft := ContainerToSelectedContainer(DragRect.TopLeft);
-    BottomRight := ContainerToSelectedContainer(DragRect.BottomRight);
+    Result.TopLeft := ContainerToSelectedContainer(DragRect.TopLeft);
+    Result.BottomRight := ContainerToSelectedContainer(DragRect.BottomRight);
   end;
 end;
 
@@ -730,13 +739,10 @@ var
 
   procedure KeepInParent;
   begin
-    with P do
-    begin
-      if CO.Left > ClientWidth then
-        CO.Left := ClientWidth - CO.Width;
-      if CO.Top > ClientHeight then
-        CO.Top := ClientHeight - CO.Height;
-    end;
+    if CO.Left > P.ClientWidth then
+      CO.Left := P.ClientWidth - CO.Width;
+    if CO.Top > P.ClientHeight then
+      CO.Top := P.ClientHeight - CO.Height;
   end;
 
   procedure PasteComponent;
@@ -873,7 +879,7 @@ begin
             // then we must update the designer. This allows to programatically
             // change the location of a control while making the designer handles
             // follow it around (Mantis 4693).
-            // For this to work properly, we MUST udpate the bounds of the
+            // For this to work properly, we MUST update the bounds of the
             // control before calling UpdateDesigner because the VCL has not yet
             // processed the WM_WINDOWPOSCHANGED message when this code executes.
             // If we did not, the designer would use the previous position of the

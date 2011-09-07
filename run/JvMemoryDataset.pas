@@ -100,6 +100,9 @@ type
   PJvMemBuffer = PAnsiChar;
   {$ENDIF UNICODE}
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvMemoryData = class(TDataSet)
   private
     FSaveLoadState: TSaveLoadState;
@@ -359,18 +362,19 @@ uses
   {$IFDEF HAS_UNIT_ANSISTRINGS}
   AnsiStrings,
   {$ENDIF HAS_UNIT_ANSISTRINGS}
-  FMTBcd,
+  FMTBcd, SqlTimSt,
   {$IFNDEF UNICODE}
   JvJCLUtils,
   {$ENDIF ~UNICODE}
   JvJVCLUtils,
-  JvResources;
+  JvResources, JclSysUtils;
 
 const
   ftBlobTypes = [ftBlob, ftMemo, ftGraphic, ftFmtMemo, ftParadoxOle,
     ftDBaseOle, ftTypedBinary, ftOraBlob, ftOraClob
     {$IFDEF COMPILER10_UP}, ftWideMemo{$ENDIF COMPILER10_UP}];
 
+  // If you add a new supported type you _must_ also update CalcFieldLen()
   ftSupported = [ftString, ftSmallint, ftInteger, ftWord, ftBoolean,
     ftFloat, ftCurrency, ftDate, ftTime, ftDateTime, ftAutoInc, ftBCD,
     ftFMTBCD, ftTimestamp,
@@ -456,18 +460,36 @@ begin
         Result := SizeOf(Double);
       ftCurrency:
         Result := SizeOf(Double);
-      ftFMTBCD, ftBCD:
-        Result := SizeOf(TBcd);
       ftDate, ftTime:
         Result := SizeOf(Longint);
       ftDateTime:
         Result := SizeOf(TDateTime);
+      ftAutoInc:
+        Result := SizeOf(Longint);
+      ftBCD, ftFMTBCD:
+        Result := SizeOf(TBcd);
+      ftTimeStamp:
+        Result := SizeOf(TSQLTimeStamp);
+      {$IFDEF COMPILER10_UP}
+      ftOraTimestamp:
+        Result := SizeOf(TSQLTimeStamp);
+      ftFixedWideChar:
+        Result := (Result + 1) * SizeOf(WideChar);
+      {$ENDIF COMPILER10_UP}
+      {$IFDEF COMPILER12_UP}
+      ftLongWord:
+        Result := SizeOf(LongWord);
+      ftShortint:
+        Result := SizeOf(Shortint);
+      ftByte:
+        Result := SizeOf(Byte);
+      ftExtended:
+        Result := SizeOf(Extended);
+      {$ENDIF COMPILER12_UP}
       ftBytes:
         Result := Size;
       ftVarBytes:
         Result := Size + 2;
-      ftAutoInc:
-        Result := SizeOf(Longint);
       ftADT:
         Result := 0;
       ftFixedChar:
@@ -1067,7 +1089,7 @@ begin
               VarData := PVariant(Buffer)^
             else
               VarData := EmptyParam;
-            Data^ := Ord((Buffer <> nil) and not (VarIsNull(VarData) or VarIsEmpty(VarData)));
+            Data^ := Ord((Buffer <> nil) and not (VarIsNullEmpty(VarData)));
             if Data^ <> 0 then
             begin
               Inc(Data);
@@ -2250,6 +2272,19 @@ begin
 end;
 
 procedure TJvMemoryData.CreateIndexList(const FieldNames: WideString);
+type
+  TFieldTypeSet = set of TFieldType;
+
+  function GetSetFieldNames(const FieldTypeSet: TFieldTypeSet): string;
+  var
+    FieldType: TFieldType;
+  begin
+    for FieldType := Low(TFieldType) to High(TFieldType) do
+      if FieldType in FieldTypeSet then
+        Result := Result + FieldTypeNames[FieldType] + ', ';
+    Result := Copy(Result, 1, Length(Result) - 2);
+  end;
+
 var
   Pos: Integer;
   F: TField;
@@ -2265,7 +2300,8 @@ begin
     if {(F.FieldKind = fkData) and }(F.DataType in ftSupported - ftBlobTypes) then
       FIndexList.Add(F)
     else
-      ErrorFmt(SFieldTypeMismatch, [F.DisplayName]);
+      ErrorFmt(SFieldTypeMismatch, [F.DisplayName, GetSetFieldNames(ftSupported - ftBlobTypes),
+        FieldTypeNames[F.DataType]]);
   end;
 end;
 
@@ -2344,12 +2380,17 @@ begin
   DisableControls;
   FSaveLoadState := slsLoading;
   try
-    SetLength(OriginalFields, Len);
-    SetLength(FCopyFromDataSetFieldDefs, Len);
-    for I := 0 to Len - 1 do
+    SetLength(OriginalFields, Fields.Count);
+    SetLength(FCopyFromDataSetFieldDefs, Fields.Count);
+    for I := 0 to Fields.Count - 1 do
     begin
-      OriginalFields[I] := FDataSet.FindField(Fields[I].FieldName);
-      FCopyFromDataSetFieldDefs[I] := FieldDefList.IndexOf(Fields[I].FullName);
+      if Fields[I].FieldKind <> fkCalculated then
+      begin
+        OriginalFields[I] := FDataSet.FindField(Fields[I].FieldName);
+        FCopyFromDataSetFieldDefs[I] := FieldDefList.IndexOf(Fields[I].FullName);
+      end
+      else
+        FCopyFromDataSetFieldDefs[I] := -1;
     end;
     StatusField := nil;
     if FApplyMode <> amNone then
@@ -2371,19 +2412,22 @@ begin
     while not FDataSet.EOF do
     begin
       Append;
-      for I := 0 to Len - 1 do
+      for I := 0 to Fields.Count - 1 do
       begin
-        Original := OriginalFields[I];
-        if Original <> nil then
+        if Fields[I].FieldKind <> fkCalculated then
         begin
-          FieldReadOnly := Fields[I].ReadOnly;
-          if FieldReadOnly then
-            Fields[I].ReadOnly := False;
-          try
-            CopyFieldValue(Fields[I], Original);
-          finally
+          Original := OriginalFields[I];
+          if Original <> nil then
+          begin
+            FieldReadOnly := Fields[I].ReadOnly;
             if FieldReadOnly then
-              Fields[I].ReadOnly := True;
+              Fields[I].ReadOnly := False;
+            try
+              CopyFieldValue(Fields[I], Original);
+            finally
+              if FieldReadOnly then
+                Fields[I].ReadOnly := True;
+            end;
           end;
         end;
       end;

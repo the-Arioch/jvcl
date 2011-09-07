@@ -141,6 +141,9 @@ type
   end;
   {$M-}
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvCreateProcess = class(TJvComponent)
   private
     FApplicationName: string;
@@ -253,7 +256,7 @@ const
 type
   { Threads which monitor the created process }
 
-  TJvWaitForProcessThread = class(TThread)
+  TJvWaitForProcessThread = class(TJvCustomThread)
   private
     FExitCode: DWORD;
     FCloseEvent: THandle;
@@ -725,6 +728,7 @@ procedure TJvWaitForProcessThread.Execute;
 var
   WaitHandles: array [0..1] of THandle;
 begin
+  NameThread(ThreadName);
   WaitHandles[0] := FCloseEvent;
   WaitHandles[1] := FProcessHandle;
   WaitForInputIdle(FProcessHandle, INFINITE);

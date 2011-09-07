@@ -365,6 +365,7 @@ type
     FStyle: TJvInspectorStyle;
     FStylePainter: TJvInspectorPainter;
     FSettingStyle: Boolean;
+    FMouseWheelRecursion: Boolean;
     procedure SetInspectObject(const Value: TObject);
     procedure SetStyle(const Value: TJvInspectorStyle);
     function GetActivePainter: TJvInspectorPainter;
@@ -534,6 +535,9 @@ type
     property ActivePainter: TJvInspectorPainter read GetActivePainter;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvInspector = class(TJvCustomInspector)
   public
     property LockCount;
@@ -722,6 +726,9 @@ type
     property CategoryColor default clBtnFace;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvInspectorBorlandPainter = class(TJvInspectorBorlandNETBasePainter)
   private
     FDividerLightColor: TColor;
@@ -743,6 +750,9 @@ type
     property OnSetItemColors: TOnJvInspectorSetItemColors read FOnSetItemColors write FOnSetItemColors;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvInspectorDotNETPainter = class(TJvInspectorBorlandNETBasePainter)
   private
     FHideSelectColor: TColor;
@@ -2083,7 +2093,7 @@ implementation
 uses
   RTLConsts, Types, StrUtils, Variants, Consts, Dialogs, Forms, Buttons,
   JclRTTI, JclLogic, JclStrings,
-  JvJCLUtils, JvThemes, JvResources;
+  JvJCLUtils, JvThemes, JvResources, JclSysUtils;
 
 // BCB Type Info support
 var
@@ -2469,7 +2479,7 @@ begin
     if Items[I] <> Instance then
       raise EJvInspectorData.CreateRes(@RsEInspectorInternalError);
     if I < High(FInstanceList) then
-      Move(FInstanceList[I + 1], FInstanceList[I], (Length(FInstanceList) - I) * SizeOf(TJvCustomInspectorData));
+      Move(FInstanceList[I + 1], FInstanceList[I], (High(FInstanceList) - I) * SizeOf(TJvCustomInspectorData));
     SetLength(FInstanceList, High(FInstanceList));
     if not FClearing then
     begin
@@ -4132,8 +4142,17 @@ var
 begin
   if (Selected <> nil) and Selected.DroppedDown then
   begin
-    LbPos := Selected.ListBox.ScreenToClient(ClientToScreen(MousePos));
-    Selected.ListBox.Perform(WM_MOUSEWHEEL, WheelDelta shl 16, MakeLong(LbPos.X, LbPos.Y));
+    // If Selected.ListBox gets the WM_MOUSEWHEEL we would run into an infinite recursion
+    if not FMouseWheelRecursion then
+    begin
+      FMouseWheelRecursion := True;
+      try
+        LbPos := Selected.ListBox.ScreenToClient(ClientToScreen(MousePos));
+        Selected.ListBox.Perform(WM_MOUSEWHEEL, WheelDelta shl 16, MakeLong(LbPos.X, LbPos.Y));
+      finally
+        FMouseWheelRecursion := False;
+      end;
+    end;
   end
   else
   begin
@@ -6289,7 +6308,7 @@ begin
       begin
         StopTracking;
         MousePos := PointToSmallPoint(ListPos);
-        SendMessage(ListBox.Handle, WM_LBUTTONDOWN, 0, LPARAM(MousePos));
+        SendMessage(ListBox.Handle, WM_LBUTTONDOWN, 0, {$IFDEF RTL230_UP}PointToLParam{$ELSE}LPARAM{$ENDIF RTL230_UP}(MousePos));
         Exit;
       end;
     end;
@@ -6809,7 +6828,7 @@ begin
         if Pressed then
           BFlags := BF_FLAT;
         {$IFDEF JVCLThemesEnabled}
-        if ThemeServices.ThemesEnabled then
+        if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
           DrawThemedButtonFace(Inspector, ACanvas, R, 0, bsNew, False, Pressed, False, False)
         else
         {$ENDIF JVCLThemesEnabled}
@@ -8923,8 +8942,7 @@ begin
     { Clip all outside of the item rectangle }
     IntersectRect(ClipRect, ARect, Rects[iprValue]);
     FCheckRect := ClipRect;
-    with ClipRect do
-      Rgn := CreateRectRgn(Left, Top, Right, Bottom);
+    Rgn := CreateRectRgn(ClipRect.Left, ClipRect.Top, ClipRect.Right, ClipRect.Bottom);
     SelectClipRgn(ACanvas.Handle, Rgn);
     DeleteObject(Rgn);
     try
@@ -8979,7 +8997,7 @@ constructor TJvInspectorDateItem.Create(const AParent: TJvCustomInspectorItem;
   const AData: TJvCustomInspectorData);
 begin
   inherited Create(AParent, AData);
-  FFormat := {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat;
+  FFormat := JclFormatSettings.ShortDateFormat;
 end;
 
 function TJvInspectorDateItem.GetDisplayValue: string;
@@ -9015,7 +9033,7 @@ begin
     case Value[I] of
       'd':
         begin
-          if (DCount = 0) and (I > 1) and (Value[I - 1] <> {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator) then
+          if (DCount = 0) and (I > 1) and (Value[I - 1] <> JclFormatSettings.DateSeparator) then
             raise EJvInspectorData.CreateRes(@RsESpecifierBeforeSeparator);
           if (DCount = 1) and (Value[I - 1] <> 'd') then
             raise EJvInspectorData.CreateRes(@RsEDOrDDOnlyOnce);
@@ -9025,7 +9043,7 @@ begin
         end;
       'm':
         begin
-          if (MCount = 0) and (I > 1) and (Value[I - 1] <> {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator) then
+          if (MCount = 0) and (I > 1) and (Value[I - 1] <> JclFormatSettings.DateSeparator) then
             raise EJvInspectorData.CreateRes(@RsESpecifierBeforeSeparator);
           if (MCount = 1) and (Value[I - 1] <> 'm') then
             raise EJvInspectorData.CreateRes(@RsEMOrMMOnlyOnce);
@@ -9035,7 +9053,7 @@ begin
         end;
       'y':
         begin
-          if (MCount = 0) and (I > 1) and (Value[I - 1] <> {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator) then
+          if (MCount = 0) and (I > 1) and (Value[I - 1] <> JclFormatSettings.DateSeparator) then
             raise EJvInspectorData.CreateRes(@RsESpecifierBeforeSeparator);
           if (YCount > 1) and (YCount < 4) and (Value[I - 1] <> 'y') then
             raise EJvInspectorData.CreateRes(@RsEYYOrYYYYOnlyOnce);
@@ -9044,17 +9062,17 @@ begin
           Inc(YCount);
         end;
     else
-      if Value[I] = {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator then
+      if Value[I] = JclFormatSettings.DateSeparator then
       begin
         if ((SepCount = 0) and (I = 1)) or
-          ((SepCount = 1) and ((Value[I - 1]) = {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator) or (I = Length(Value))) then
+          ((SepCount = 1) and ((Value[I - 1]) = JclFormatSettings.DateSeparator) or (I = Length(Value))) then
           raise EJvInspectorData.CreateRes(@RsESpecifierBeforeSeparator);
         if SepCount = 2 then
           raise EJvInspectorData.CreateRes(@RsEOnlyTwoSeparators);
         Inc(SepCount);
       end
       else
-        raise EJvInspectorData.CreateResFmt(@RsEOnlyDMYSAllowed, [{$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator]);
+        raise EJvInspectorData.CreateResFmt(@RsEOnlyDMYSAllowed, [JclFormatSettings.DateSeparator]);
     end;
     Inc(I);
   end;
@@ -10157,8 +10175,8 @@ begin
   end;
   if I >= 0 then
   begin
-    if I <> High(FItems) then
-      Move(FItems[I + 1], FItems[I], (Length(FItems) - I) * SizeOf(TJvCustomInspectorItem));
+    if I < High(FItems) then
+      Move(FItems[I + 1], FItems[I], (High(FItems) - I) * SizeOf(TJvCustomInspectorItem));
     SetLength(FItems, High(FItems));
   end;
   if Length(FItems) = 0 then
@@ -11467,7 +11485,7 @@ function TJvInspectorCustomConfData.GetAsFloat: Extended;
 begin
   CheckReadAccess;
   if TypeInfo.Kind = tkFloat then
-    Result := StrToFloat(Trim(StringReplace(ReadValue, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator,
+    Result := StrToFloat(Trim(StringReplace(ReadValue, JclFormatSettings.ThousandSeparator, JclFormatSettings.DecimalSeparator,
       [rfReplaceAll, rfIgnoreCase])))
   else
     raise EJvInspectorData.CreateResFmt(@RsEJvInspDataNoAccessAs, [cJvInspectorFloat]);

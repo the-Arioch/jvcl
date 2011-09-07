@@ -153,7 +153,7 @@ implementation
 uses
   Math, Consts, MultiMon,
   JvThemes, JvConsts, JvResources, JvJCLUtils, JvToolEdit, JvSpeedButton,
-  JvComponent, JvJVCLUtils;
+  JvComponent, JvJVCLUtils, JclSysUtils;
 
 procedure FontSetDefault(AFont: TFont);
 
@@ -169,13 +169,12 @@ begin
   if SystemParametersInfo(SPI_GETNONCLIENTMETRICS, NonClientMetrics.cbSize, @NonClientMetrics, 0) then
     AFont.Handle := CreateFontIndirect(NonClientMetrics.lfMessageFont)
   else
-    with AFont do
-    begin
-      Color := clWindowText;
-      Name := 'MS Sans Serif';
-      Size := 8;
-      Style := [];
-    end;
+  begin
+    AFont.Color := clWindowText;
+    AFont.Name := 'MS Sans Serif';
+    AFont.Size := 8;
+    AFont.Style := [];
+  end;
 end;
 
 procedure CreateButtonGlyph(Glyph: TBitmap; Idx: Integer);
@@ -319,50 +318,38 @@ var
   procedure DefaultDraw;
   begin
     if TheText <> '' then
-      with ARect, Canvas do
-      begin
-        Brush.Style := bsClear;
-        TextRect(ARect, Left + (Right - Left - TextWidth(TheText)) div 2,
-          Top + (Bottom - Top - TextHeight(TheText)) div 2, TheText);
-      end;
+    begin
+      Canvas.Brush.Style := bsClear;
+      Canvas.TextRect(ARect, ARect.Left + (ARect.Right - ARect.Left - TextWidth(TheText)) div 2,
+        ARect.Top + (ARect.Bottom - ARect.Top - TextHeight(TheText)) div 2, TheText);
+    end;
   end;
 
   procedure PoleDraw;
   begin
-    with ARect, Canvas do
-    begin
-      if (ARow > 0) and ((FMinDate <> NullDate) or (FMaxDate <> NullDate)) then
-        if not CellInRange(ACol, ARow) then
-          if TheText <> '' then
+    if (ARow > 0) and ((FMinDate <> NullDate) or (FMaxDate <> NullDate)) then
+      if not CellInRange(ACol, ARow) then
+        if TheText <> '' then
+        begin
+          Canvas.Font.Color := clBtnFace;
+          if Color = clBtnFace then
           begin
-            Font.Color := clBtnFace;
-            if Color = clBtnFace then
-            begin
-              Font.Color := clBtnHighlight;
-              TextRect(ARect, Left + (Right - Left - TextWidth(TheText)) div 2 + 1,
-                Top + (Bottom - Top - TextHeight(TheText)) div 2 + 1, TheText);
-              Font.Color := clBtnShadow;
-            end;
+            Canvas.Font.Color := clBtnHighlight;
+            Canvas.TextRect(ARect, ARect.Left + (ARect.Right - ARect.Left - TextWidth(TheText)) div 2 + 1,
+              ARect.Top + (ARect.Bottom - ARect.Top - TextHeight(TheText)) div 2 + 1, TheText);
+            Canvas.Font.Color := clBtnShadow;
           end;
-      DefaultDraw;
-    end;
+        end;
+    DefaultDraw;
   end;
   //<Polaris
 
 begin
   TheText := CellText[ACol, ARow];
-  with ARect, Canvas do
-  begin
-    if IsWeekend(ACol, ARow) and not (gdSelected in AState) then
-      Font.Color := WeekendColor;
+  if IsWeekend(ACol, ARow) and not (gdSelected in AState) then
+    Canvas.Font.Color := WeekendColor;
 
-    PoleDraw;
-    {
-          TextRect(ARect, Left + (Right - Left - TextWidth(TheText)) div 2,
-            Top + (Bottom - Top - TextHeight(TheText)) div 2, TheText);
-
-    }
-  end;
+  PoleDraw;
 end;
 
 function TJvCalendar.GetCellText(ACol, ARow: Integer): string;
@@ -370,7 +357,7 @@ var
   DayNum: Integer;
 begin
   if ARow = 0 then { day names at tops of columns }
-    Result := {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDayNames[(Ord(StartOfWeek) + ACol) mod 7 + 1]
+    Result := JclFormatSettings.ShortDayNames[(Ord(StartOfWeek) + ACol) mod 7 + 1]
   else
   begin
     DayNum := FMonthOffset + ACol + (ARow - 1) * 7;
@@ -985,7 +972,7 @@ begin
     Exit;
 
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.ThemesEnabled then
+  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     VertOffset := 0;
     HorzOffset := 0;
@@ -1217,8 +1204,8 @@ begin
   if not (csDesigning in ComponentState) then
   begin
     try
-      if (Trim(ReplaceStr(VarToStr(Value), {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DateSeparator, '')) = '') or
-        VarIsNull(Value) or VarIsEmpty(Value) then
+      if (Trim(ReplaceStr(VarToStr(Value), JclFormatSettings.DateSeparator, '')) = '') or
+        VarIsNullEmpty(Value) then
         FCalendar.CalendarDate := VarToDateTime(SysUtils.Date)
       else
         FCalendar.CalendarDate := VarToDateTime(Value);
@@ -1703,7 +1690,7 @@ begin
   if StrDate <> '' then
   begin
     try
-      DateValue := StrToDateFmt({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat, StrDate);
+      DateValue := StrToDateFmt(JclFormatSettings.ShortDateFormat, StrDate);
     except
       DateValue := Date;
     end;
@@ -1713,7 +1700,7 @@ begin
   Result := SelectDate(Sender, DateValue, DlgCaption, AStartOfWeek, AWeekends,
     AWeekendColor, BtnHints, MinDate, MaxDate); // Polaris
   if Result then
-    StrDate := FormatDateTime({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ShortDateFormat, DateValue);
+    StrDate := FormatDateTime(JclFormatSettings.ShortDateFormat, DateValue);
 end;
 
 {$IFDEF UNITVERSIONING}

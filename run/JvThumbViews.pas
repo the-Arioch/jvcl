@@ -36,7 +36,7 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Classes, Controls, Forms, ExtCtrls,
   FileCtrl, StdCtrls, SysUtils, Messages, Graphics,
-  JvThumbNails, JvBaseThumbnail, JvExControls;
+  JvThumbnails, JvBaseThumbnail, JvExControls;
 
 type
   // (rom) already in JvBaseThumbnail
@@ -57,6 +57,9 @@ type
     property Thumbnail[Index: Longint]: TJvThumbnail read GetThumbnail; default;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvThumbView = class(TJvBaseThumbView)
   private
     FMaxSize: TPoint;

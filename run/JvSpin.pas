@@ -53,6 +53,9 @@ type
 
   TJvSpinButtonStyle = (sbsDefault, sbsClassic);
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvSpinButton = class(TJvGraphicControl)
   private
     FDown: TSpinButtonState;
@@ -269,6 +272,9 @@ type
     property OnTopClick: TNotifyEvent read FOnTopClick write FOnTopClick;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvSpinEdit = class(TJvCustomSpinEdit)
   protected
     procedure SetValue(NewValue: Extended); override;
@@ -406,12 +412,18 @@ type
     property Time: TDateTime read GetTime write SetTime;
   end;
 
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF RTL230_UP}
   TJvTimeEdit = class(TJvCustomTimeEdit)
   published
     property ButtonKind default bkDiagonal;
     property ShowSeconds default False;
     property Hour24 default True;
     property DataConnector;
+    property ShowButton;
+    property EditorEnabled;
+    property ArrowKeys;
 
     property Align;
     property Alignment;
@@ -442,6 +454,7 @@ type
     property TabOrder;
     property TabStop;
     property Visible;
+    property OnBottomClick;
     property OnChange;
     property OnClick;
     property OnDblClick;
@@ -457,6 +470,7 @@ type
     property OnMouseMove;
     property OnMouseUp;
     property OnStartDrag;
+    property OnTopClick;
     property OnContextPopup;
     property OnMouseWheelDown;
     property OnMouseWheelUp;
@@ -490,7 +504,7 @@ uses
   TmSchema,
   {$ENDIF !COMPILER7_UP}
   {$ENDIF JVCLThemesEnabled}
-  JvJCLUtils, JvJVCLUtils, JvConsts, JvResources, JvToolEdit, JclStrings;
+  JvJCLUtils, JvJVCLUtils, JvConsts, JvResources, JvToolEdit, JclStrings, JclSysUtils;
 
 {$R JvSpin.Res}
 
@@ -631,8 +645,8 @@ end;
 
 function RemoveThousands(const AValue: string): string;
 begin
-  if {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator <> {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator then
-    Result := DelChars(AValue, {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator)
+  if JclFormatSettings.DecimalSeparator <> JclFormatSettings.ThousandSeparator then
+    Result := DelChars(AValue, JclFormatSettings.ThousandSeparator)
   else
     Result := AValue;
 end;
@@ -711,8 +725,8 @@ begin
     // (outchy) only shift SelStart by the difference in number of ThousandSeparator BEFORE SelStart
     // do not shift if SelStart was clamped (new text length is shorter than OldSelText)
     if Thousands and (SelStart = OldSelStart) then
-      SelStart := SelStart + StrCharCount(Copy(Text, 1, SelStart), {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator) -
-        StrCharCount(Copy(OldText, 1, SelStart), {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator);
+      SelStart := SelStart + StrCharCount(Copy(Text, 1, SelStart), JclFormatSettings.ThousandSeparator) -
+        StrCharCount(Copy(OldText, 1, SelStart), JclFormatSettings.ThousandSeparator);
 
     inherited Change;
     FOldValue := Value;
@@ -1037,12 +1051,12 @@ begin
   ValidChars := DigitChars + ['+', '-'];
   if ValueType = vtFloat then
   begin
-    if Pos({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator, Text) = 0 then
+    if Pos(JclFormatSettings.DecimalSeparator, Text) = 0 then
     begin
-      if not Thousands or ({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator <> '.') then
-        ValidChars := ValidChars + [{$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator, '.']
+      if not Thousands or (JclFormatSettings.ThousandSeparator <> '.') then
+        ValidChars := ValidChars + [JclFormatSettings.DecimalSeparator, '.']
       else
-        ValidChars := ValidChars + [{$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator];
+        ValidChars := ValidChars + [JclFormatSettings.DecimalSeparator];
     end;
     if Pos('E', AnsiUpperCase(Text)) = 0 then
       ValidChars := ValidChars + ['e', 'E'];
@@ -1077,9 +1091,9 @@ begin
   end;
   // do not delete the decimal separator while typing
   // all decimal digits were moved to the integer part and new decimals were added at the end
-  if (Key = VK_DELETE) and (SelStart < Length(Text)) and (Text[SelStart + 1] = {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator) then
+  if (Key = VK_DELETE) and (SelStart < Length(Text)) and (Text[SelStart + 1] = JclFormatSettings.DecimalSeparator) then
     Key := VK_RIGHT;
-  if (Key = VK_BACK) and (SelStart > 0) and (Text[SelStart] = {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator) then
+  if (Key = VK_BACK) and (SelStart > 0) and (Text[SelStart] = JclFormatSettings.DecimalSeparator) then
     Key := VK_LEFT;
 end;
 
@@ -1088,13 +1102,13 @@ var
   I: Integer;
 begin
   // (outchy) moved at the beginning, hitting '.' now behaves like hitting the decimal separator
-  if (Key = '.') and (not Thousands or ({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}ThousandSeparator <> '.')) then
-    Key := {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator;
+  if (Key = '.') and (not Thousands or (JclFormatSettings.ThousandSeparator <> '.')) then
+    Key := JclFormatSettings.DecimalSeparator;
 
-  if (Key = {$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator) and (ValueType = vtFloat) then
+  if (Key = JclFormatSettings.DecimalSeparator) and (ValueType = vtFloat) then
   begin
     { If the key is the decimal separator move the caret behind it. }
-    I := Pos({$IFDEF RTL220_UP}FormatSettings.{$ENDIF RTL220_UP}DecimalSeparator, Text);
+    I := Pos(JclFormatSettings.DecimalSeparator, Text);
     if I <> 0 then
     begin
       Key := #0;
@@ -1216,8 +1230,7 @@ begin
         R.Right := Height;
       end;
     end;
-    with R do
-      FBtnWindow.SetBounds(Left, Top, Right - Left, Bottom - Top);
+    FBtnWindow.SetBounds(R.Left, R.Top, R.Right - R.Left, R.Bottom - R.Top);
     FButton.SetBounds(1, 1, FBtnWindow.Width - 1, FBtnWindow.Height - 1);
   end;
 end;
@@ -1572,7 +1585,7 @@ begin
       FMouseInBottomBtn := True
     else
       FMouseInTopBtn := True;
-    if ThemeServices.ThemesEnabled then
+    if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
       Repaint;
     inherited MouseEnter(Control);
   end;
@@ -1581,10 +1594,9 @@ end;
 
 function TJvSpinButton.MouseInBottomBtn(const P: TPoint): Boolean;
 begin
-  with P do
-    Result :=
-      ((FButtonStyle = sbsDefault)) and (Y > (-(Width / Height) * X + Height)) or
-      ((FButtonStyle = sbsClassic) and (Y > (Height div 2)));
+  Result :=
+    ((FButtonStyle = sbsDefault)) and (P.Y > (-(Width / Height) * P.X + Height)) or
+    ((FButtonStyle = sbsClassic) and (P.Y > (Height div 2)));
 end;
 
 {$IFDEF JVCLThemesEnabled}
@@ -1596,7 +1608,7 @@ begin
   begin
     FMouseInTopBtn := False;
     FMouseInBottomBtn := False;
-    if ThemeServices.ThemesEnabled then
+    if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
       Repaint;
     inherited MouseLeave(Control);
   end;
@@ -1647,7 +1659,7 @@ begin
   end
   {$IFDEF JVCLThemesEnabled}
   else
-  if (FMouseInTopBtn or FMouseInBottomBtn) and ThemeServices.ThemesEnabled then
+  if (FMouseInTopBtn or FMouseInBottomBtn) and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
   begin
     if MouseInBottomBtn(Point(X, Y)) then
     begin
@@ -2016,7 +2028,7 @@ end;
 procedure TSpinButtonBitmaps.DrawAllBitmap;
 begin
   {$IFDEF JVCLThemesEnabled}
-  FIsThemed := ThemeServices.ThemesEnabled;
+  FIsThemed := ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP};
   if FIsThemed then
   begin
     if FStyle = sbsClassic then
@@ -2090,16 +2102,10 @@ begin
 
   { Construct the regions (needed because the up & down buttons overlap
     each other) }
-  with TopRect do
-  begin
-    TopRegion_TopAbove := CreateRectRgn(Left, Top, Right, Bottom + 1);
-    TopRegion_BottomAbove := CreateRectRgn(Left, Top, Right, Bottom);
-  end;
-  with BottomRect do
-  begin
-    BottomRegion_TopAbove := CreateRectRgn(Left, Top + 1, Right, Bottom);
-    BottomRegion_BottomAbove := CreateRectRgn(Left, Top, Right, Bottom);
-  end;
+  TopRegion_TopAbove := CreateRectRgn(TopRect.Left, TopRect.Top, TopRect.Right, TopRect.Bottom + 1);
+  TopRegion_BottomAbove := CreateRectRgn(TopRect.Left, TopRect.Top, TopRect.Right, TopRect.Bottom);
+  BottomRegion_TopAbove := CreateRectRgn(BottomRect.Left, BottomRect.Top + 1, BottomRect.Right, BottomRect.Bottom);
+  BottomRegion_BottomAbove := CreateRectRgn(BottomRect.Left, BottomRect.Top, BottomRect.Right, BottomRect.Bottom);
   try
     { Draw the buttons }
     ConstructThemedButton(FTopDownBtn, bpsPressed, bpsNormal);
@@ -2408,16 +2414,12 @@ begin
   begin
     { Draw up arraw }
     if Enabled then
-    begin
-      with UpArrowPos do
-        Draw(X, Y, AUpArrow)
-    end
+      Draw(UpArrowPos.X, UpArrowPos.Y, AUpArrow)
     else
     begin
       DisabledBitmap := CreateDisabledBitmap(AUpArrow, clBlack);
       try
-        with UpArrowPos do
-          Draw(X, Y, DisabledBitmap);
+        Draw(UpArrowPos.X, UpArrowPos.Y, DisabledBitmap);
       finally
         DisabledBitmap.Free;
       end;
@@ -2425,14 +2427,12 @@ begin
 
     { Draw bottom arrow }
     if Enabled then
-      with DownArrowPos do
-        Draw(X, Y, ADownArrow)
+      Draw(DownArrowPos.X, DownArrowPos.Y, ADownArrow)
     else
     begin
       DisabledBitmap := CreateDisabledBitmap(ADownArrow, clBlack);
       try
-        with DownArrowPos do
-          Draw(X, Y, DisabledBitmap);
+        Draw(DownArrowPos.X, DownArrowPos.Y, DisabledBitmap);
       finally
         DisabledBitmap.Free;
       end;
@@ -2737,34 +2737,24 @@ end;
 
 procedure TJvCustomTimeEdit.UpdateTimeDigits(Increment: Boolean);
 
-  function SetNumberChar(const S: string; APos: Integer; AValue: Char): string;
+  procedure SetNumberChar(var S: string; APos: Integer; AValue: Char);
   begin
-    Result := S;
-    Result[APos] := AValue;
+    S[APos] := AValue;
   end;
 
-  function IncNumberChar(const S: string; APos: Integer): string;
-  var
-    Ch: Char;
+  procedure IncNumberChar(var S: string; APos: Integer);
   begin
-    Result := S;
-    Ch := Result[APos];
-    Inc(Ch);
-    Result[APos] := Ch;
+    S[APos] := Succ(S[APos]);
   end;
 
-  function DecNumberChar(const S: string; APos: Integer): string;
-  var
-    Ch: Char;
+  procedure DecNumberChar(var S: string; APos: Integer);
   begin
-    Result := S;
-    Ch := Result[APos];
-    Dec(Ch);
-    Result[APos] := Ch;
+    S[APos] := Pred(S[APos]);
   end;
 
 var
-  Offset: Integer;
+  Offset, AMPMOffset: Integer;
+  NewValue: string;
 begin
   if ReadOnly then
   begin
@@ -2774,134 +2764,152 @@ begin
   if Text = '' then
     Exit;
 
+  NewValue := Text;
+
+  AMPMOffset := 10;
+  if not FShowSeconds then
+    AMPMOffset := 7;
+
   Position := SelStart;
+  // Hours
   if (SelStart = 0) or (SelStart = 1) or (SelStart = 2) then
   begin
     if Hour24 then
     begin
       if Increment then
       begin
-        if (Text[1] = '2') and (Text[2] = '3') then
+        if (NewValue[1] = '2') and (NewValue[2] = '3') then
         begin
-          Text := SetNumberChar(Text, 1, '0');
-          Text := SetNumberChar(Text, 2, '0');
+          SetNumberChar(NewValue, 1, '0');
+          SetNumberChar(NewValue, 2, '0');
         end
         else
-        if Text[2] = '9' then
+        if NewValue[2] = '9' then
         begin
-          Text := SetNumberChar(Text, 2, '0');
-          Text := IncNumberChar(Text, 1);
+          SetNumberChar(NewValue, 2, '0');
+          IncNumberChar(NewValue, 1);
         end
         else
-          Text := IncNumberChar(Text, 2);
+          IncNumberChar(NewValue, 2);
       end
       else // decrement
       begin
-        if (Text[1] = '0') and (Text[2] = '0') then
+        if (NewValue[1] = '0') and (NewValue[2] = '0') then
         begin
-          Text := SetNumberChar(Text, 1, '2');
-          Text := SetNumberChar(Text, 2, '3');
+          SetNumberChar(NewValue, 1, '2');
+          SetNumberChar(NewValue, 2, '3');
         end
         else
-        if Text[2] = '0' then
+        if NewValue[2] = '0' then
         begin
-          Text := DecNumberChar(Text, 1);
-          Text := SetNumberChar(Text, 2, '9');
+          DecNumberChar(NewValue, 1);
+          SetNumberChar(NewValue, 2, '9');
         end
         else
-          Text := DecNumberChar(Text, 2);
-      end
+          DecNumberChar(NewValue, 2);
+      end;
     end
 
     else // Hour 12 AM/PM
     begin
       if Increment then
       begin
-        if (Text[1] = '1') and (Text[2] = '2') then
+        if (NewValue[1] = '1') and (NewValue[2] = '2') then
         begin
-          if Text[10] = 'A' then
-            Text := SetNumberChar(Text, 10, 'P')
+          SetNumberChar(NewValue, 1, '0');
+          SetNumberChar(NewValue, 2, '1');
+          if NewValue[AMPMOffset] = 'A' then
+            SetNumberChar(NewValue, AMPMOffset, 'P')
           else
-            Text := SetNumberChar(Text, 10, 'A');
-          Text := SetNumberChar(Text, 1, '0');
-          Text := SetNumberChar(Text, 2, '1');
+            SetNumberChar(NewValue, AMPMOffset, 'A');
         end
         else
-        if Text[2] = '9' then
+        if NewValue[2] = '9' then
         begin
-          Text := SetNumberChar(Text, 2, '0');
-          Text := IncNumberChar(Text, 1);
+          IncNumberChar(NewValue, 1);
+          SetNumberChar(NewValue, 2, '0');
         end
         else
-          Text := IncNumberChar(Text, 2);
+          IncNumberChar(NewValue, 2);
       end
       else // decrement
       begin
-        if (Text[1] = '0') and (Text[2] = '1') then
+        if (NewValue[1] = '0') and (NewValue[2] = '1') then
         begin
-          if Text[10] = 'A' then
-            Text := SetNumberChar(Text, 10, 'P')
+          SetNumberChar(NewValue, 1, '1');
+          SetNumberChar(NewValue, 2, '2');
+          if NewValue[AMPMOffset] = 'A' then
+            SetNumberChar(NewValue, AMPMOffset, 'P')
           else
-            Text := SetNumberChar(Text, 10, 'A');
-          Text := SetNumberChar(Text, 1, '1');
-          Text := SetNumberChar(Text, 2, '2');
+            SetNumberChar(NewValue, AMPMOffset, 'A');
         end
         else
-        if Text[2] = '0' then
+        if NewValue[2] = '0' then
         begin
-          Text := SetNumberChar(Text, 1, '0');
-          Text := SetNumberChar(Text, 2, '9');
+          SetNumberChar(NewValue, 1, '0');
+          SetNumberChar(NewValue, 2, '9');
         end
         else
-          Text := DecNumberChar(Text, 2);
+          DecNumberChar(NewValue, 2);
       end;
     end;
-
-    SelStart := Position;
   end
 
+  // Minutes
   else
-  if (SelStart >= 3) and (SelStart <= 5) then
+  if (SelStart >= 3) and (SelStart <= AMPMOffset - 2) then
   begin
+    Offset := 7;
     if (SelStart <= 5) then
-      Offset := 4
-    else
-      Offset := 7;
+      Offset := 4;
 
     if Increment then
     begin
-      if (Text[Offset] = '5') and (Text[Offset + 1] = '9') then
+      if (NewValue[Offset] = '5') and (NewValue[Offset + 1] = '9') then
       begin
-        Text := SetNumberChar(Text, Offset, '0');
-        Text := SetNumberChar(Text, Offset + 1, '0');
+        SetNumberChar(NewValue, Offset, '0');
+        SetNumberChar(NewValue, Offset + 1, '0');
       end
       else
-      if Text[Offset + 1] = '9' then
+      if NewValue[Offset + 1] = '9' then
       begin
-        Text := SetNumberChar(Text, Offset + 1, '0');
-        Text := IncNumberChar(Text, Offset);
+        IncNumberChar(NewValue, Offset);
+        SetNumberChar(NewValue, Offset + 1, '0');
       end
       else
-        Text := IncNumberChar(Text, Offset + 1);
+        IncNumberChar(NewValue, Offset + 1);
     end
     else // decrement
     begin
-      if (Text[Offset] = '0') and (Text[Offset + 1] = '0') then
+      if (NewValue[Offset] = '0') and (NewValue[Offset + 1] = '0') then
       begin
-        Text := SetNumberChar(Text, Offset, '5');
-        Text := SetNumberChar(Text, Offset + 1, '9');
+        SetNumberChar(NewValue, Offset, '5');
+        SetNumberChar(NewValue, Offset + 1, '9');
       end
       else
-      if Text[Offset + 1] = '0' then
+      if NewValue[Offset + 1] = '0' then
       begin
-        Text := SetNumberChar(Text, Offset + 1, '9');
-        Text := DecNumberChar(Text, Offset);
+        DecNumberChar(NewValue, Offset);
+        SetNumberChar(NewValue, Offset + 1, '9');
       end
       else
-        Text := DecNumberChar(Text, Offset + 1);
+        DecNumberChar(NewValue, Offset + 1);
     end;
-    SelStart := Position;
+  end
+
+  // AM/PM
+  else
+  if not Hour24 and (SelStart >= AMPMOffset - 1) and (SelStart <= AMPMOffset + 2) then
+  begin
+    case NewValue[AMPMOffset] of
+      'A': NewValue[AMPMOffset] := 'P';
+      'a': NewValue[AMPMOffset] := 'a';
+      'P': NewValue[AMPMOffset] := 'A';
+      'p': NewValue[AMPMOffset] := 'a';
+    end;
   end;
+  Text := NewValue;
+  SelStart := Position;
 end;
 
 procedure TJvCustomTimeEdit.WMCut(var Msg: TMessage);
@@ -2979,22 +2987,49 @@ procedure TJvCustomTimeEdit.KeyPress(var Key: Char);
     Result[APos] := AValue;
   end;
 
+var
+  TimePos, MaxLen: Integer;
 begin
+  MaxLen := 5; // '00:00'
+  if ShowSeconds then
+    Inc(MaxLen, 3); // ':00'
+  if not Hour24 then
+    Inc(MaxLen, 3); // ' AM'
+
   case SelStart of
-    0:  if not CharInSet(Key, ['0'..'2']) then Key := #0;
-    1:  if not CharInSet(Key, ['0'..'9']) then Key := #0;
-    2:  Key := ':';
-    3:  if not CharInSet(Key, ['0'..'5']) then Key := #0;
-    4:  if not CharInSet(Key, ['0'..'9']) then Key := #0;
-    5:  Key := ':';
-    6:  if not CharInSet(Key, ['0'..'5']) then Key := #0;
-    7:  if not CharInSet(Key, ['0'..'9']) then Key := #0;
-    8:  Key := ' ';
-    9:  if (Key = 'a') or (Key = 'A') then Key := 'A'
-        else if (Key = 'p') or (Key = 'P') then Key := 'P'
-        else Key := #0;
-   10:  if (Key = 'm') or (Key = 'M') then Key := 'M'
-        else Key := #0;
+    0: if not CharInSet(Key, ['0'..'2']) then Key := #0;
+    1: if not CharInSet(Key, ['0'..'9']) then Key := #0;
+    2: if CharInSet(Key, ['0'..'5']) then // allow the user to skip the ':'
+         SelStart := SelStart + 1
+       else
+         Key := ':';
+    3: if not CharInSet(Key, ['0'..'5']) then Key := #0;
+    4: if not CharInSet(Key, ['0'..'9']) then Key := #0;
+  end;
+  if SelStart >= 5 then
+  begin
+    TimePos := SelStart;
+    if not FShowSeconds then
+      Inc(TimePos, 3);
+    if SelStart < MaxLen then
+    begin
+      case TimePos of
+        5: if CharInSet(Key, ['0'..'5']) then
+             SelStart := SelStart + 1 // allow the user to skip the ':'
+           else
+             Key := ':';
+        6: if not CharInSet(Key, ['0'..'5']) then Key := #0;
+        7: if not CharInSet(Key, ['0'..'9']) then Key := #0;
+        8: Key := ' ';
+        9: if (Key = 'a') or (Key = 'A') then Key := 'A'
+           else if (Key = 'p') or (Key = 'P') then Key := 'P'
+           else Key := #0;
+       10: if (Key = 'm') or (Key = 'M') then Key := 'M'
+           else Key := #0;
+      end;
+    end
+    else
+      Key := #0;
   end;
 
   if (SelStart <> Length(Text)) and (Key <> #0) then
@@ -3005,7 +3040,7 @@ begin
     Key := #0;
   end;
 
-  if Length(Text) > 10 then
+  if Length(Text) > MaxLen then
     Key := #0;
 end;
 

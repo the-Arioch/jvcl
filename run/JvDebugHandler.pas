@@ -131,6 +131,9 @@ uses
   AppEvnts;
 
 type
+  {$IFDEF RTL230_UP}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  {$ENDIF RTL230_UP}
   TJvDebugHandler = class(TComponent)
   private
     FExceptionLogging: Boolean;
@@ -250,7 +253,7 @@ begin
   UnitName := '';
   ProcedureName := '';
   Loc := '';
-  if FExceptionLogging then
+  if FExceptionLogging and not (csDesigning in ComponentState) then
   begin
     ExceptionStringList := TStringList.Create;
     try
@@ -271,9 +274,6 @@ begin
         if JclLastExceptStackList <> nil Then
           JclLastExceptStackList.AddToStrings(ExceptionStringList);
       end;
-
-      if Assigned(FOnOtherDestination) Then
-        FOnOtherDestination(Self);
 
       if FLogToFile Then
       begin
@@ -301,6 +301,11 @@ begin
           end;
         end;
       end;
+
+      if Assigned(FOnOtherDestination) Then
+        FOnOtherDestination(Self)
+      else
+        Application.ShowException(Exception(ExceptObj));
     finally
       ExceptionStringList.Free;
     end;
