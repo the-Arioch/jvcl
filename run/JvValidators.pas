@@ -110,6 +110,7 @@ type
     // register a new base validator class. DisplayName is used by the design-time editor.
     // A class with an empty DisplayName will not sshow up in the editor
     class procedure RegisterBaseValidator(const DisplayName: string; AValidatorClass: TJvBaseValidatorClass);
+    class procedure UnregisterBaseValidator(AValidatorClass: TJvBaseValidatorClass);
 
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -302,7 +303,6 @@ uses
   Variants,
   TypInfo,
 //  JclUnicode, // for reg exp support
-  JclWideStrings,
   JvTypes, JvResources, JvJVCLUtils;
 
 var
@@ -371,6 +371,18 @@ begin
   begin
     Classes.RegisterClass(TPersistentClass(AValidatorClass));
     ValidatorsList.AddObject(DisplayName, Pointer(AValidatorClass));
+  end;
+end;
+
+class procedure TJvBaseValidator.UnregisterBaseValidator(AValidatorClass: TJvBaseValidatorClass);
+var
+  ClassIndex: Integer;
+begin
+  ClassIndex := ValidatorsList.IndexOfObject(Pointer(AValidatorClass));
+  if ClassIndex >= 0 then
+  begin
+    Classes.UnregisterClass(TPersistentClass(AValidatorClass));
+    ValidatorsList.Delete(ClassIndex);
   end;
 end;
 
@@ -787,9 +799,14 @@ begin
       { Get all controls that should be validated }
       if FErrorIndicator <> nil then
         for I := 0 to Count - 1 do
-          if Items[I].Enabled and (Items[I].ControlToValidate <> nil) then
-            if Controls.IndexOf(Items[I].ControlToValidate) = -1 then
-              Controls.Add(Items[I].ControlToValidate);
+        begin
+          ErrCtrl := Items[i].ErrorControl;
+          if ErrCtrl = nil then
+            ErrCtrl := Items[i].ControlToValidate;
+          if ErrCtrl <> nil then
+            if Controls.IndexOf(ErrCtrl) = -1 then
+              Controls.Add(ErrCtrl);
+        end;
 
       for I := 0 to Count - 1 do
       begin
@@ -809,7 +826,7 @@ begin
               if ErrorIndicator <> nil then
                 FErrorIndicator.SetError(ErrCtrl, Items[I].ErrorMessage);
               if FErrorIndicator <> nil then
-                Controls.Remove(Items[I].ControlToValidate); { control is not valid }
+                Controls.Remove(ErrCtrl); { control is not valid }
             end;
             Result := False;
             if not DoValidateFailed(Items[I]) then

@@ -64,7 +64,10 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Messages, SysUtils, Classes, Graphics, Controls, StdCtrls,
   Forms, Dialogs,
-  JvComponent, JvExControls;
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
+  JvComponent, JvExControls, JvTypes;
 
 type
   TJvPreviewScaleMode = (
@@ -240,6 +243,19 @@ type
     property Visible: Boolean read FVisible write SetVisible default True;
   end;
 
+  TJvCustomPreviewControlDeactivateHintThread = class(TJvCustomThread)
+  private
+    FOwner: TJvCustomPreviewControl;
+    FDelay: Integer;
+
+    procedure HideHintWindow;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AOwner: TJvCustomPreviewControl);
+    procedure Start(Delay: Integer = 0);
+  end;
+
   TJvCustomPreviewControl = class(TJvCustomControl)
   private
     FBuffer: TBitmap;
@@ -276,6 +292,9 @@ type
     FOnOptionsChange: TNotifyEvent;
     FOnScrollHint: TJvScrollHintEvent;
     FSelection: TJvPreviewSelection;
+    FHintWindow: THintWindow;
+    FDeactivateHintThread: TJvCustomPreviewControlDeactivateHintThread;
+
     procedure DoOptionsChange(Sender: TObject);
     procedure DoDeviceInfoChange(Sender: TObject);
     procedure DoScaleModeChange(Sender: TObject);
@@ -448,32 +467,8 @@ const
 implementation
 
 uses
-  Math,
-  JvThemes, JvTypes;
-
-var
-  HintWindow: THintWindow = nil;
-
-function GetHintWindow: THintWindow;
-begin
-  if HintWindow = nil then
-  begin
-    HintWindow := HintWindowClass.Create(Application);
-    HintWindow.Visible := False;
-  end;
-  Result := HintWindow;
-end;
-
-type
-  TDeactiveHintThread = class(TJvCustomThread)
-  private
-    FHintWindow: THintWindow;
-    FDelay: Integer;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(Delay: Integer; HintWindow: THintWindow);
-  end;
+  Types, Math,
+  JvThemes;
 
   // returns True if Inner is completely within Outer
 
@@ -502,18 +497,6 @@ begin
     (Inner.Top < Outer.Bottom) and
     (Inner.Right > Outer.Left) and
     (Inner.Bottom > Outer.Top);
-end;
-
-// use our own EnsureRange since D5 doesn't have it
-
-function EnsureRange(const AValue, AMin, AMax: Integer): Integer;
-begin
-  Result := AValue;
-  Assert(AMin <= AMax);
-  if Result < AMin then
-    Result := AMin;
-  if Result > AMax then
-    Result := AMax;
 end;
 
 //=== { TJvPreviewPageOptions } ==============================================
@@ -925,6 +908,8 @@ begin
   FScrollBars := ssBoth;
   FHideScrollBars := False;
   TabStop := True;
+
+  FDeactivateHintThread := TJvCustomPreviewControlDeactivateHintThread.Create(Self);
 end;
 
 destructor TJvCustomPreviewControl.Destroy;
@@ -935,6 +920,8 @@ begin
   FOptions.Free;
   FPages.Free;
   FBuffer.Free;
+  FDeactivateHintThread.Free;
+  FHintWindow.Free;
   inherited Destroy;
 end;
 
@@ -1216,9 +1203,15 @@ end;
 
 procedure TJvCustomPreviewControl.DrawPreview(PageIndex: Integer;
   APageRect, APrintRect: TRect);
+var
+  SaveIndex: Integer;
 begin
+  // prevent painting outside page
+  SaveIndex := SaveDC(FBuffer.Canvas.Handle);
+  IntersectClipRect(FBuffer.Canvas.Handle, APageRect.Left, APageRect.Top, APageRect.Right, APageRect.Bottom);
   FBuffer.Canvas.StretchDraw(APageRect, Pages[PageIndex]);
   DoDrawPreviewPage(PageIndex, FBuffer.Canvas, APageRect, APrintRect);
+  RestoreDC(FBuffer.Canvas.Handle, SaveIndex);
 end;
 
 function TJvCustomPreviewControl.GetPage(Index: Integer): TMetafile;
@@ -1366,8 +1359,7 @@ begin
       end;
     SB_ENDSCROLL:
       begin
-        TDeactiveHintThread.Create(500, HintWindow);
-        HintWindow := nil;
+        FDeactivateHintThread.Start;
         Exit;
       end;
   end;
@@ -1543,11 +1535,11 @@ begin
   DC := GetDC(HWND_DESKTOP);
   try
     if AWidth > 0 then
-      AWidth := MulDiv(AWidth, 100, MulDiv(DeviceInfo.PhysicalWidth,
-        GetDeviceCaps(DC, LOGPIXELSX), DeviceInfo.LogPixelsX));
+      AWidth := AWidth * Int64(100) div
+        MulDiv(DeviceInfo.PhysicalWidth, GetDeviceCaps(DC, LOGPIXELSX), DeviceInfo.LogPixelsX);
     if AHeight > 0 then
-      AHeight := MulDiv(AHeight, 100, MulDiv(DeviceInfo.PhysicalHeight,
-        GetDeviceCaps(DC, LOGPIXELSY), DeviceInfo.LogPixelsY));
+      AHeight := AHeight * Int64(100) div
+        MulDiv(DeviceInfo.PhysicalHeight, GetDeviceCaps(DC, LOGPIXELSY), DeviceInfo.LogPixelsY);
     if (AHeight > 0) and (AWidth > 0) then
       Result := Min(AWidth, AHeight)
     else
@@ -1641,11 +1633,14 @@ begin
 
     FTotalRows := Max((PageCount div TotalCols) + Ord(PageCount mod TotalCols <> 0), 1);
 
-    // TODO: this just isn't right...
-    FMaxHeight := TotalRows * (FPageHeight + Integer(Options.VertSpacing)) + Integer(Options.VertSpacing);
-    //    if (FMaxHeight > ClientHeight) and (TotalRows > 1) then
-    //      Dec(FMaxHeight,FPageHeight - Integer(Options.VertSpacing));
-    FMaxWidth := TotalCols * (FPageWidth + Integer(Options.HorzSpacing)) + Integer(Options.HorzSpacing);
+    FMaxHeight := TotalRows * (FPageHeight + Integer(Options.VertSpacing));
+    if IsPageMode then
+      FMaxHeight := FMaxHeight + Max((ClientHeight - ((FPageHeight + Integer(Options.VertSpacing)) * VisibleRows)) div 2, FOptions.VertSpacing) * 2
+    else
+      FMaxHeight := FMaxHeight + Integer(Options.VertSpacing) * 2;
+
+    FMaxWidth := TotalCols * (FPageWidth + Integer(Options.HorzSpacing));
+    FMaxWidth := FMaxWidth + Max((ClientWidth - ((FPageWidth + Integer(Options.HorzSpacing)) * TotalCols)) div 2, Integer(Options.HorzSpacing));
   finally
     ReleaseDC(HWND_DESKTOP, DC);
   end;
@@ -1756,8 +1751,7 @@ begin
     Msg.Result := 0;
     WMVScroll(Msg);
     Refresh;
-    TDeactiveHintThread.Create(500, HintWindow);
-    HintWindow := nil;
+    FDeactivateHintThread.Start;
     Result := True;
   end;
 end;
@@ -1819,7 +1813,6 @@ end;
 procedure TJvCustomPreviewControl.DoScrollHint(NewPos: Integer);
 var
   S: string;
-  HW: THintWindow;
   Pt: TPoint;
   R: TRect;
 begin
@@ -1830,22 +1823,31 @@ begin
     FOnScrollHint(Self, NewPos, S);
     if S <> '' then
     begin
-      HW := GetHintWindow;
-      if not HW.Visible then
+      if not Assigned(FHintWindow) then
       begin
-        HW.Color := Application.HintColor;
-        HW.Visible := True;
+        if Assigned(HintWindowClass) then
+          FHintWindow := HintWindowClass.Create(Self)
+        else
+          FHintWindow := Forms.HintWindowClass.Create(Self);
+          
+        FHintWindow.Visible := False;
       end;
-      R := Rect(0, 0, HW.Canvas.TextWidth(S) + 6,
-        HW.Canvas.TextHeight(S) + 4);
+
+      if not FHintWindow.Visible then
+      begin
+        FHintWindow.Color := Application.HintColor;
+        FHintWindow.Visible := True;
+      end;
+      R := Rect(0, 0, FHintWindow.Canvas.TextWidth(S) + 6,
+        FHintWindow.Canvas.TextHeight(S) + 4);
       GetCursorPos(Pt);
       Pt := ScreenToClient(Pt);
-      Pt.X := ClientWidth - HW.Canvas.TextWidth(S) - 12;
+      Pt.X := ClientWidth - FHintWindow.Canvas.TextWidth(S) - 12;
       Pt := ClientToScreen(Pt);
       OffsetRect(R, Pt.X, Pt.Y - 4);
-      HW.ActivateHint(R, S);
-      HW.Invalidate;
-      HW.Update;
+      FHintWindow.ActivateHint(R, S);
+      FHintWindow.Invalidate;
+      FHintWindow.Update;
     end;
   end;
 end;
@@ -1904,27 +1906,57 @@ end;
 
 //=== { TDeactiveHintThread } ================================================
 
-constructor TDeactiveHintThread.Create(Delay: Integer; HintWindow: THintWindow);
+constructor TJvCustomPreviewControlDeactivateHintThread.Create(AOwner: TJvCustomPreviewControl);
 begin
   inherited Create(False);
-  FreeOnTerminate := True;
-  FHintWindow := HintWindow;
-  FDelay := Delay;
-  if FDelay = 0 then
-    FDelay := Application.HintHidePause;
+  FreeOnTerminate := False;
+  FOwner := AOwner;
+  FDelay := -1;
 end;
 
-procedure TDeactiveHintThread.Execute;
+procedure TJvCustomPreviewControlDeactivateHintThread.Execute;
+const
+  Step = 10;
+var
+  Elapsed: Integer;
 begin
   NameThread(ThreadName);
-  Sleep(FDelay);
-  if FHintWindow <> nil then
+  Elapsed := 0;
+
+  while not Terminated do
   begin
-    FHintWindow.Visible := False;
-    FHintWindow.ActivateHint(Rect(0, 0, 0, 0), '');
-    FHintWindow := nil;
+    if FDelay >= 0 then
+    begin
+      if FDelay = 0 then
+        FDelay := Application.HintHidePause;
+        
+      Inc(Elapsed, Step);
+
+      if Elapsed > FDelay then
+      begin
+        Synchronize(HideHintWindow);
+        Elapsed := 0;
+        FDelay := -1;
+      end;
+    end;
+
+    Sleep(Step);
   end;
-  Terminate;
+end;
+
+procedure TJvCustomPreviewControlDeactivateHintThread.HideHintWindow;
+begin
+  if Assigned(FOwner.FHintWindow) then
+  begin
+    FOwner.FHintWindow.Visible := False;
+    FOwner.FHintWindow.ActivateHint(Rect(0, 0, 0, 0), '');
+    FOwner.FHintWindow.ReleaseHandle;
+  end;
+end;
+
+procedure TJvCustomPreviewControlDeactivateHintThread.Start(Delay: Integer);
+begin
+  FDelay := Delay;
 end;
 
 procedure TJvCustomPreviewControl.SetSelection(const Value: TJvPreviewSelection);

@@ -36,7 +36,7 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   SysUtils, Classes, Windows, Messages, Graphics, Controls, Forms, StdCtrls,
-  JvThemes, JvExControls, JvExStdCtrls, JvCheckBox, JvJCLUtils, JvComponent;
+  JvThemes, JvExControls, JvExStdCtrls, JvCheckBox, JvJCLUtils;
 
 type
   {$IFDEF RTL230_UP}

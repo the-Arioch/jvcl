@@ -34,6 +34,9 @@ procedure Register;
 implementation
 
 uses
+  {$IFDEF HAS_UNIT_SYSTEM_ACTIONS}
+  System.Actions,
+  {$ENDIF HAS_UNIT_SYSTEM_ACTIONS}
   Classes, Dialogs, ActnList,
   DesignEditors, DesignIntf,
   JvDsgnConsts,
@@ -41,9 +44,9 @@ uses
   JvDsgnConfig,
   JvDialogActnResForm, JvDialogs, JvPageSetupTitled, JvPageSetup,
   JvAppletEditor,
-  JvWinDialogs, JvAddPrinter, JvCommonDialogD, JvConnectNetwork, JvCopyError,
+  JvWinDialogs, JvAddPrinter, JvCustomFileMessageDialog, JvConnectNetwork, JvCopyError,
   JvDeleteError, JvRenameError, JvDiskPrompt, JvFindFiles,
-  JvObjectPickerDialog, JvCommonDialogDEditor,
+  JvObjectPickerDialog, JvCustomFileMessageDialogEditor,
   JvBaseDlg, JvFindReplace, JvDSADialogs, JvTipOfDay, JvCommonExecDlg,
   JvDesktopAlert, JvDesktopAlertEditors, JvProgressComponent, JvSelectDirectory,
   JvImageDlg, JvLoginForm, JvDualList, JvProgressDialog, JvBaseDlgEditor,
@@ -85,9 +88,7 @@ begin
   RegisterComponentEditor(TJvOpenDialog, TJvBaseDlgEditor);
   RegisterComponentEditor(TJvSaveDialog, TJvBaseDlgEditor);
 
-  RegisterComponentEditor(TJvCommonDialogP, TJvBaseDlgEditor);
-  RegisterComponentEditor(TJvCommonDialogF, TJvBaseDlgEditor);
-  RegisterComponentEditor(TJvCommonDialogD, TJvCommonDialogDEditor);
+  RegisterComponentEditor(TJvCustomFileMessageDialog, TJvCustomFileMessageDialogEditor);
   RegisterComponentEditor(TJvTipOfDay, TJvTipOfDayEditor);
   RegisterActions(RsJVCLActionsCategory, [TJvBrowseForFolderAction,
     TJvSelectDirectoryAction, TJvConnectNetworkAction, TJvFloppyFormatAction,

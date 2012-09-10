@@ -37,11 +37,10 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, SysUtils, Classes, IniFiles,
-  JclBase,
   JvAppStorage, JvPropertyStore, JvTypes;
 
 type
-  TJvAppIniStorageOptions = class(TJvAppStorageOptions)
+  TJvAppIniStorageOptions = class(TJvAppFileStorageOptions)
   private
     FReplaceCRLF: Boolean;
     FPreserveLeadingTrailingBlanks: Boolean;
@@ -52,10 +51,26 @@ type
     constructor Create; override;
     procedure Assign(Source: TPersistent); override;
   published
+    property BooleanStringTrueValues;
+    property BooleanStringFalseValues;
+    property BooleanAsString;
+    property EnumerationAsString;
+    property TypedIntegerAsString;
+    property SetAsString;
+    property DateTimeAsString;
+    property FloatAsString default False;
+    property DefaultIfReadConvertError;
+    property DefaultIfValueNotExists;
+    property StoreDefaultValues;
+    property UseOldItemNameFormat;
+    property UseTranslateStringEngineDateTimeFormats;
+    property BackupType;
+    property BackupKeepFileAfterFlush;
+    property BackupHistoryCount;
+    property BackupHistoryType;
     property ReplaceCRLF: Boolean read FReplaceCRLF write SetReplaceCRLF default False;
     property PreserveLeadingTrailingBlanks: Boolean read FPreserveLeadingTrailingBlanks
       write SetPreserveLeadingTrailingBlanks default False;
-    property FloatAsString default False;
   end;
 
   // Storage to INI file, all in memory. This is the base class
@@ -129,12 +144,11 @@ type
   [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
   {$ENDIF RTL230_UP}
   TJvAppIniFileStorage = class(TJvCustomAppIniStorage)
-  private
-    procedure FlushInternal;
-    procedure ReloadInternal;
+  protected
+    procedure ClearInternal; override;
+    procedure FlushInternal; override;
+    procedure ReloadInternal; override;
   public
-    procedure Flush; override;
-    procedure Reload; override;
     property AsString;
     property IniFile;
   published
@@ -176,7 +190,7 @@ implementation
 uses
   JvJCLUtils, // BinStrToBuf & BufToBinStr
   JvConsts, JvResources,
-  JclStrings; // JvConsts or PathDelim under D5 and BCB5
+  JclStrings;
 
 const
   cNullDigit = '0';
@@ -409,12 +423,26 @@ var
   Section: string;
   Key: string;
   Value: string;
+  {$IFDEF CPUX64}
+  Ext80Value: Extended80;
+  {$ENDIF CPUX64}
 begin
   SplitKeyPath(Path, Section, Key);
   if ValueExists(Section, Key) then
   begin
     Value := ReadValue(Section, Key);
+    {$IFDEF CPUX64}
+    // Keep backward compatiblity to x86 Extended type
+    if BinStrToBuf(Value, @Ext80Value, SizeOf(Ext80Value)) = SizeOf(Ext80Value) then
+      try
+        Result := Ext80Value
+      except
+        Result := Default;
+      end
+    else
+    {$ELSE}
     if BinStrToBuf(Value, @Result, SizeOf(Result)) <> SizeOf(Result) then
+    {$ENDIF CPUX64}
       Result := Default;
   end
   else
@@ -425,9 +453,18 @@ procedure TJvCustomAppIniStorage.DoWriteFloat(const Path: string; Value: Extende
 var
   Section: string;
   Key: string;
+  {$IFDEF CPUX64}
+  Ext80Value: Extended80;
+  {$ENDIF CPUX64}
 begin
   SplitKeyPath(Path, Section, Key);
+  {$IFDEF CPUX64}
+  // Keep backward compatiblity to x86 Extended type
+  Ext80Value := Value;
+  WriteValue(Section, Key, BufToBinStr(@Ext80Value, SizeOf(Ext80Value)));
+  {$ELSE}
   WriteValue(Section, Key, BufToBinStr(@Value, SizeOf(Value)));
+  {$ENDIF CPUX64}
 end;
 
 function TJvCustomAppIniStorage.DoReadString(const Path: string; const Default: string): string;
@@ -771,46 +808,16 @@ end;
 
 //=== { TJvAppIniFileStorage } ===============================================
 
-procedure TJvAppIniFileStorage.Flush;
-var
-  Path: string;
+procedure TJvAppIniFileStorage.ClearInternal;
 begin
-  if (FullFileName <> '') and not ReadOnly and not (csDesigning in ComponentState) then
-  begin
-    try
-      Path := ExtractFilePath(IniFile.FileName);
-      if Path <> '' then
-        ForceDirectories(Path);
-      if SynchronizeFlushReload then
-        Synchronize(FlushInternal, FullFileName)
-      else
-        FlushInternal;
-    except
-      on E: Exception do
-        DoError(E.Message);
-    end;
-  end;
+  IniFile.Clear;
 end;
+
 
 procedure TJvAppIniFileStorage.FlushInternal;
 begin
   IniFile.Rename(FullFileName, False);
   IniFile.UpdateFile;
-end;
-
-procedure TJvAppIniFileStorage.Reload;
-begin
-  if not IsUpdating and not (csDesigning in ComponentState) then
-  begin
-    inherited Reload;
-    if FileExists(FullFileName) then
-      if SynchronizeFlushReload then
-        Synchronize(ReloadInternal, FullFileName)
-      else
-        ReloadInternal
-    else  // file may have disappeared. If so, clear the file
-      IniFile.Clear;
-  end;
 end;
 
 procedure TJvAppIniFileStorage.ReloadInternal;
@@ -838,6 +845,8 @@ begin
     AppStorage.Location := flCustom;
     AppStorage.FileName := AFileName;
     AppStorage.DefaultSection := ADefaultSection;
+    AppStorage.FlushOnDestroy := False;
+    AppStorage.SynchronizeFlushReload := True;
     SaveAppStorage := APropertyStore.AppStorage;
     SaveAppStoragePath := APropertyStore.AppStoragePath;
     try
@@ -871,6 +880,8 @@ begin
     AppStorage.Location := flCustom;
     AppStorage.FileName := AFileName;
     AppStorage.DefaultSection := ADefaultSection;
+    AppStorage.FlushOnDestroy := False;
+    AppStorage.SynchronizeFlushReload := True;
     SaveAppStorage := APropertyStore.AppStorage;
     SaveAppStoragePath := APropertyStore.AppStoragePath;
     try

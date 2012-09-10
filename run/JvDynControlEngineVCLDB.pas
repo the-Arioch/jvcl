@@ -34,6 +34,9 @@ uses
   {$ENDIF UNITVERSIONING}
   Classes, ExtCtrls, ExtDlgs, Graphics, Buttons, Controls, Dialogs, FileCtrl,
   Forms, DBCtrls, DB, DBGrids, StdCtrls,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvDynControlEngine, JvDynControlEngineDB, JvDynControlEngineIntf,
   JvDynControlEngineDBIntf;
 
@@ -480,7 +483,7 @@ implementation
 
 uses
   Variants, SysUtils,
-  JvDynControlEngineTools, JvDynControlEngineVCL, JvConsts, JvJCLUtils;
+  JvDynControlEngineTools, JvJCLUtils;
 
 var
   IntDynControlEngineVCLDB: TJvDynControlEngineDB = nil;

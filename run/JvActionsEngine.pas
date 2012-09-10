@@ -34,11 +34,11 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   {$IFDEF MSWINDOWS}
-  Windows, ActnList, ImgList, Graphics,
+  Windows, ActnList, Graphics, ImgList,
   {$ENDIF MSWINDOWS}
-  {$IFDEF UNIX}
-  QWindows, QActnList, QImgList, QGraphics,
-  {$ENDIF UNIX}
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   Controls, Classes;
 
 type
@@ -93,11 +93,11 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     function HandlesTarget(Target: TObject): Boolean; override;
-    procedure SetChecked(Value: Boolean);
-    procedure SetEnabled(Value: Boolean);
-    procedure SetImageIndex(Value: Integer);
+    procedure SetChecked(Value: Boolean); {$IFDEF RTL240_UP}override;{$ENDIF RTL240_UP}
+    procedure SetEnabled(Value: Boolean); {$IFDEF RTL240_UP}override;{$ENDIF RTL240_UP}
+    procedure SetImageIndex(Value: TImageIndex); {$IFDEF RTL240_UP}override;{$ENDIF RTL240_UP}
     procedure SetParentComponent(AParent: TComponent); override;
-    procedure SetVisible(Value: Boolean);
+    procedure SetVisible(Value: Boolean); {$IFDEF RTL240_UP}override;{$ENDIF RTL240_UP}
     procedure UpdateTarget(Target: TObject); override;
     property ActionComponent: TComponent read FActionComponent write SetActionComponent;
   end;
@@ -145,8 +145,8 @@ const
 implementation
 
 uses
-  SysUtils, Grids, TypInfo, StrUtils, Variants,
-  JvResources, JvJVCLUtils;
+  SysUtils, Variants,
+  JvJVCLUtils;
 
 //=== { TJvActionEngineList } ========================================
 
@@ -302,7 +302,7 @@ begin
     Enabled := Value;
 end;
 
-procedure TJvActionEngineBaseAction.SetImageIndex(Value: Integer);
+procedure TJvActionEngineBaseAction.SetImageIndex(Value: TImageIndex);
 begin
   if ImageIndex <> Value then
     ImageIndex := Value;

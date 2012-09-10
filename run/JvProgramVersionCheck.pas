@@ -36,10 +36,14 @@ uses
   IdHTTP, IdFTP,
   {$ENDIF USE_3RDPARTY_INDY}
   {$IFDEF USE_3RDPARTY_ICS}
+  {$IFDEF DELPHI7_UP}
+  OverbyteIcsHttpProt, OverbyteIcsFtpCli,
+  {$ELSE}
   HttpProt, FtpCli,
+  {$ENDIF DELPHI7_UP}
   {$ENDIF USE_3RDPARTY_ICS}
-  JvPropertyStore, JvAppStorage, JvAppIniStorage, JvAppXMLStorage, JvComponent,
-  JvParameterList, JvThread, JvUrlListGrabber, JvUrlGrabbers, JvThreadDialog, SysUtils;
+  JvPropertyStore, JvAppStorage, JvAppIniStorage, JvAppXMLStorage,
+  JvParameterList, JvThread, JvThreadDialog, SysUtils;
 
 type
   { Type of release of a Program Version }
@@ -645,19 +649,18 @@ end;
 
 //=== { TJvProgramVersionsStringList } =======================================
 
-procedure TJvProgramVersionsStringList.Sort;
-
-  function VersionNumberSortCompare(List: TStringList; Index1, Index2: Integer): Integer;
-  var
-    S1, S2: string;
-  begin
-    S1 := TJvProgramVersionInfo(List.Objects[Index1]).ProgramVersion;
-    S2 := TJvProgramVersionInfo(List.Objects[Index2]).ProgramVersion;
-    Result := CompareVersionNumbers(S1, S2);
-  end;
-
+function VersionNumberSortCompare(List: TStringList; Index1, Index2: Integer): Integer;
+var
+  Info1, Info2: TJvProgramVersionInfo;
 begin
-  CustomSort(@VersionNumberSortCompare);
+  Info1 := TJvProgramVersionInfo(List.Objects[Index1]);
+  Info2 := TJvProgramVersionInfo(List.Objects[Index2]);
+  Result := CompareVersionNumbers(Info1.ProgramVersion, Info2.ProgramVersion);
+end;
+
+procedure TJvProgramVersionsStringList.Sort;
+begin
+  CustomSort(VersionNumberSortCompare);
 end;
 
 function TJvProgramVersionCheck.CreateVersionHistoryAppstorage(aFileFormat: TjvProgramVersionHistoryFileFormat):

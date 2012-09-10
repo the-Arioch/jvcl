@@ -1,2 +1,2 @@
-#define Include_Delphi15
-#define JvclVersionStr "3.41"
+#define Include_Delphi17
+#define JvclVersionStr "3.45"

@@ -37,6 +37,9 @@ uses
   Classes, Controls,
   FiltEdit,
   ImgList,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   DesignEditors, DesignIntf,
   JvDsgnConsts, JvTypes,
   JvRichEdit,
@@ -53,7 +56,8 @@ uses
   JvCheckListBox, JvControlBar, JvCtrls, JvGroupBox, JvHeaderControl,
   JvImage, JvLabel, JvRadioButton, JvRadioGroup, JvScrollBar, JvShape,
   JvStaticText, JvStatusBar, JvGrids, JvStringGrid, JvBitBtn, JvPanel, JvImageList,
-  JvCheckedItemsForm, JvProgressEditor, JvDsgnEditors, JvCheckedMaskEdit;
+  JvCheckedItemsForm, JvProgressEditor, JvDsgnEditors, JvCheckedMaskEdit,
+  JvIPAddressEditor;
 
 {$R JvStdCtrlsReg.dcr}
 
@@ -108,6 +112,7 @@ begin
   RegisterPropertyEditor(TypeInfo(TJvImgBtnKind), TJvImgBtn, 'Kind', TJvNosortEnumProperty);
   RegisterPropertyEditor(TypeInfo(TCaption), TJvSpeedButton, 'Caption', TJvHintProperty);
   RegisterPropertyEditor(TypeInfo(TImageIndex), TJvCustomLabel, 'ImageIndex',TJvDefaultImageIndexProperty);
+  RegisterPropertyEditor(TypeInfo(LongWord), TJvIPAddress, 'Address', TJvIPAddressProperty);
 end;
 
 end.

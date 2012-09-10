@@ -67,6 +67,9 @@ uses
   Types,
   Windows, Messages, Classes, Graphics, Controls, Grids, Menus, DBGrids, DB,
   StdCtrls, Forms, Contnrs,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvTypes, {JvTypes contains Exception base class}
   JvAppStorage, JvFormPlacement, JvExDBGrids, JvDBUtils;
 
@@ -76,10 +79,7 @@ const
     {$IFDEF COMPILER14_UP}
     , dgTitleClick, dgTitleHotTrack
     {$ENDIF COMPILER14_UP}];
-
-  {$IFDEF BCB}
   {$NODEFINE DefJvGridOptions}
-  {$ENDIF BCB}
 
   JvDefaultAlternateRowColor = TColor($00CCCCCC); // Light gray
   JvDefaultAlternateRowFontColor = TColor($00000000); // Black
@@ -107,6 +107,7 @@ type
   {$ENDIF BCB}
 
   TJvDBGridColumnResize = (gcrNone, gcrGrid, gcrDataSet);
+  TJvDBGridCellHintPosition = (gchpDefault, gchpMouse);
 
   TSelectColumn = (scDataBase, scGrid);
   TTitleClickEvent = procedure(Sender: TObject; ACol: Longint;
@@ -294,6 +295,7 @@ type
     FRowResize: Boolean;
     FRowsHeight: Integer;
     FTitleRowHeight: Integer;
+    FCellHintPosition: TJvDBGridCellHintPosition;
     FCanDelete: Boolean;
 
     { Cancel edited record on mouse wheel or when resize column (double-click)}
@@ -497,6 +499,8 @@ type
 
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+
+    procedure DefaultDrawColumnCell(const Rect: TRect; DataCol: Integer; Column: TColumn; State: TGridDrawState); virtual;
     procedure DefaultDataCellDraw(const Rect: TRect; Field: TField; State: TGridDrawState);
     procedure DisableScroll;
     procedure EnableScroll;
@@ -594,6 +598,10 @@ type
       default JvGridResizeProportionally;
     property SelectColumnsDialogStrings: TJvSelectDialogColumnStrings
       read FSelectColumnsDialogStrings write SetSelectColumnsDialogStrings;
+
+    { Determines how cell hint position is calculated, check TJvDBGrid.CMHintShow (Mantis #5759) }
+    property CellHintPosition: TJvDBGridCellHintPosition read FCellHintPosition write FCellHintPosition default gchpDefault;
+
     { Allows user to delete things using the "del" key }
     property CanDelete: Boolean read FCanDelete write FCanDelete default True;
 
@@ -659,9 +667,9 @@ uses
   JvDBLookup,
   JvConsts, JvResources, JvThemes, JvJCLUtils, JvJVCLUtils,
   {$IFDEF COMPILER7_UP}
-  GraphUtil, // => TScrollDirection, DrawArray(must be after JvJVCLUtils)
+  // => TScrollDirection, DrawArray(must be after JvJVCLUtils)
   {$ENDIF COMPILER7_UP}
-  JvAppStoragePropertyEngineDB, JvDBGridSelectColumnForm, JclSysUtils;
+  JvDBGridSelectColumnForm, JclSysUtils;
 
 {$R JvDBGrid.res}
 
@@ -881,7 +889,7 @@ procedure TInternalInplaceEdit.KeyDown(var Key: Word; Shift: TShiftState);
 
   function ForwardMovement: Boolean;
   begin
-    Result := dgAlwaysShowEditor in TDBGrid(Grid).Options;
+    Result := dgAlwaysShowEditor in TJvDBGrid(Grid).Options;
   end;
 
   function Ctrl: Boolean;
@@ -2897,6 +2905,28 @@ begin
     Key := #0;
 end;
 
+procedure TJvDBGrid.DefaultDrawColumnCell(const Rect: TRect;
+  DataCol: Integer; Column: TColumn; State: TGridDrawState);
+var
+  MemoText: string;
+begin
+  if Assigned(Column.Field) and
+    (WordWrapAllFields or (Column.Field is TStringField) or (ShowMemos and IsMemoField(Column.Field))) then
+  begin
+    MemoText := Column.Field.DisplayText;
+    if FShowMemos and IsMemoField(Column.Field) then
+    begin
+      // The MemoField's default DisplayText is '(Memo)' but we want the content
+      if not Assigned(Column.Field.OnGetText) then
+        MemoText := Column.Field.AsString;
+    end;
+    WriteCellText(Rect, 2, 2, MemoText, Column.Alignment,
+      UseRightToLeftAlignmentForField(Column.Field, Column.Alignment), False);
+  end
+  else if GetImageIndex(Column.Field) < 0 then  // Mantis 5013: Must not call inherited drawer, or the text will be painted over
+    inherited DefaultDrawColumnCell(Rect, DataCol, Column, State);
+end;
+
 procedure TJvDBGrid.DefaultDataCellDraw(const Rect: TRect; Field: TField;
   State: TGridDrawState);
 begin
@@ -3502,7 +3532,6 @@ var
   Highlight: Boolean;
   Bmp: TBitmap;
   Field, ReadOnlyTestField: TField;
-  MemoText: string;
 begin
   Field := Column.Field;
   if Assigned(DataSource) and Assigned(DataSource.DataSet) and DataSource.DataSet.Active and
@@ -3545,21 +3574,7 @@ begin
     end
     else
     begin
-      if (Field <> nil) and
-         (WordWrapAllFields or (Field is TStringField) or (FShowMemos and IsMemoField(Field))) then
-      begin
-        MemoText := Field.DisplayText;
-        if FShowMemos and IsMemoField(Field) then
-        begin
-          // The MemoField's default DisplayText is '(Memo)' but we want the content
-          if not Assigned(Field.OnGetText) then
-            MemoText := Field.AsString;
-        end;
-        WriteCellText(Rect, 2, 2, MemoText, Column.Alignment,
-          UseRightToLeftAlignmentForField(Field, Column.Alignment), False);
-      end
-      else
-        DefaultDrawColumnCell(Rect, DataCol, Column, State);
+      DefaultDrawColumnCell(Rect, DataCol, Column, State);
     end;
   end;
   if (Columns.State = csDefault) or not DefaultDrawing or (csDesigning in ComponentState) then
@@ -3747,6 +3762,11 @@ begin
 
 
   FCanResizeColumn := State = gsColSizing; //  If true, mouse double clicking can resize column.
+
+  // Mantis 5818: the inherited code sometimes gives an invalid index for the column
+  if Index > FirstVisibleColumn + VisibleColCount then
+    Index := FirstVisibleColumn + VisibleColCount;
+
   FResizeColumnIndex := Index - 1;// Store the column index to resize.
 
   if (State = gsNormal) and (Y <= RowHeights[0]) then
@@ -4455,11 +4475,15 @@ var
   ACol, ARow, ATimeOut, SaveRow: Integer;
   AtCursorPosition: Boolean;
   CalcOptions: Integer;
+  InitialMousePos: TPoint;
   HintRect: TRect;
 begin
   AtCursorPosition := True;
   with Msg.HintInfo^ do
   begin
+    { Save the position of mouse cursor }
+    InitialMousePos := Mouse.CursorPos;
+
     HintStr := GetShortHint(Hint);
     ATimeOut := HideTimeOut;
     Self.MouseToCell(CursorPos.X, CursorPos.Y, ACol, ARow);
@@ -4494,7 +4518,7 @@ begin
 
     if FShowTitleHint and (ACol >= 0) and (ARow <= -1) then
     begin
-      AtCursorPosition := False;
+      AtCursorPosition := FCellHintPosition = gchpMouse;
       HintStr := Columns[ACol].FieldName;
       ATimeOut := Max(ATimeOut, Length(HintStr) * C_TIMEOUT);
       if Assigned(FOnShowTitleHint) and DataLink.Active then
@@ -4505,7 +4529,7 @@ begin
     if FShowCellHint and (ACol >= 0) and DataLink.Active and
       ((ARow >= 0) or not FShowTitleHint) then
     begin
-      AtCursorPosition := False;
+      AtCursorPosition := FCellHintPosition = gchpMouse;
       HintStr := Hint;
       SaveRow := DataLink.ActiveRecord;
       try
@@ -4558,7 +4582,9 @@ begin
     end;
 
     if not AtCursorPosition and HintWindowClass.ClassNameIs('THintWindow') then
-      HintPos := ClientToScreen(CursorRect.TopLeft);
+      HintPos := ClientToScreen(CursorRect.TopLeft)
+    else
+      HintPos := InitialMousePos;
   end;
   inherited;
 end;

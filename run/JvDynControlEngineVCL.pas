@@ -37,6 +37,9 @@ uses
   {$ENDIF MSWINDOWS}
   Variants, Classes, Controls, StdCtrls, ExtCtrls, Mask, Forms,
   Buttons, Dialogs, FileCtrl, ExtDlgs, CheckLst,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvDynControlEngine, JvDynControlEngineIntf;
 
 type
@@ -802,7 +805,6 @@ type
     function ControlGetPage(const PageName: string): TWinControl;
   end;
 
-  {$IFDEF DELPHI6_UP}
   TJvDynControlVCLColorComboBox = class(TColorBox, IUnknown, IJvDynControl,
       IJvDynControlColorComboBoxControl)
   public
@@ -826,7 +828,6 @@ type
     function GetControlDefaultColor: TColor; stdcall;
     procedure SetControlDefaultColor(const Value: TColor); stdcall;
   end;
-  {$ENDIF DELPHI6_UP}
 
 function DynControlEngineVCL: TJvDynControlEngine;
 procedure SetDynControlEngineVCLDefault;
@@ -845,7 +846,7 @@ implementation
 
 uses
   SysUtils,
-  JvDynControlEngineTools, JvConsts, JvJCLUtils;
+  JvDynControlEngineTools, JvJCLUtils;
 
 var
   IntDynControlEngineVCL: TJvDynControlEngine = nil;
@@ -2311,8 +2312,11 @@ end;
 
 procedure TJvDynControlVCLComboBox.ControlSetValue(Value: Variant);
 begin
-  if (Style = csDropDownList) and VarIsInt(Value) then
-    ItemIndex := Items.IndexOf(VarToStr(Value))
+  if (Style = csDropDownList) then
+    if VarIsInt(Value) then
+      ItemIndex := VarToInt(Value)
+    else
+      ItemIndex := Items.IndexOf(VarToStr(Value))
   else
     Text := VarToStr(Value);
 end;
@@ -3389,7 +3393,6 @@ begin
     Result := nil;
 end;
 
-{$IFDEF DELPHI6_UP}
 //=== { TJvDynControlVCLColorComboBox } ===========================================
 
 Type TAccessCustomColorBox = class(TCustomColorBox);
@@ -3474,7 +3477,6 @@ procedure TJvDynControlVCLColorComboBox.SetControlDefaultColor(const Value:
 begin
   DefaultColorColor := Value;
 end;
-{$ENDIF DELPHI6_UP}
 
 //=== { TJvDynControlEngineVCL } =============================================
 

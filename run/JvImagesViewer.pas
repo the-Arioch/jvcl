@@ -216,7 +216,6 @@ const
 implementation
 
 uses
-  StrUtils,
   JvJCLUtils;
 
 //=== { TJvImageViewerOptions } ==============================================

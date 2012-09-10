@@ -40,7 +40,10 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Messages, Classes, Graphics, Controls, Forms, StdCtrls, ExtCtrls,
   ImgList, ActnList,
-  JvButton, JvLabel, JvComponent, JvConsts, JvExForms;
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
+  JvButton, JvLabel, JvExForms;
 
 const
   cDefaultAlertFormWidth = 329;
@@ -190,7 +193,7 @@ const
 implementation
 
 uses
-  Menus, SysUtils,
+  Types, Menus, SysUtils,
   JvJVCLUtils, JvDesktopAlert, JvResources;
 
 {.$R *.dfm} // not needed

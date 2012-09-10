@@ -117,7 +117,10 @@ const
 implementation
 
 uses
-  SysUtils, Types, ExtCtrls, ComCtrls, StdCtrls, Forms, Dialogs,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF}
+  SysUtils, Types, Forms, Dialogs,
   JclFileUtils,
   JvJCLUtils,
   JvJVCLUtils;

@@ -37,7 +37,7 @@ uses
   JvBaseDlg;
 
 type
-  TJvCommonExecDialog = class(TJvCommonDialogP)
+  TJvCommonExecDialog = class(TJvCommonDialog)
   private
     FOwnerWindow: THandle;
   public
@@ -58,7 +58,7 @@ const
 implementation
 
 uses
-  Controls, JvTypes;
+  Controls;
 
 constructor TJvCommonExecDialog.Create(AOwner: TComponent);
 begin

@@ -36,7 +36,7 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  Windows, Contnrs, Classes, SysUtils,
+  Windows, Classes, SysUtils,
   JvUrlListGrabber, JvTypes;
 
 type
@@ -237,7 +237,6 @@ type
 
   TJvHttpUrlGrabberThread = class(TJvCustomUrlGrabberThread)
   protected
-    FContinue: Boolean;
     function GetGrabber: TJvHttpUrlGrabber;
     procedure Grab; override;
   public
@@ -338,6 +337,7 @@ implementation
 
 uses
   WinInet,
+  JclBase, // DWORD_PTR
   JvResources;
 
 const
@@ -756,7 +756,7 @@ var
 begin
   Buffer := nil;
 
-  FContinue := True;
+  Continue := True;
   hSession := nil;
   hHostConnection := nil;
   hDownload := nil;
@@ -803,7 +803,7 @@ begin
 
       // Connect to the host
       hHostConnection := InternetConnect(hSession, PChar(HostName), Port,
-        UserName, Password, INTERNET_SERVICE_HTTP, 0, DWORD(Self));
+        UserName, Password, INTERNET_SERVICE_HTTP, 0, DWORD_PTR(Self));
 
       if Terminated then
         Exit;
@@ -873,7 +873,7 @@ begin
       if HasSize then
       begin
         dwBytesRead := 1;
-        while (dwBytesRead > 0) and not Terminated and FContinue do
+        while (dwBytesRead > 0) and not Terminated and Continue do
         begin
           if not InternetReadFile(hDownload, @Buf, SizeOf(Buf), dwBytesRead) then
             dwBytesRead := 0
@@ -890,7 +890,7 @@ begin
         end;
 
         SetGrabberStatus(gsStopping);
-        if FContinue and not Terminated then
+        if Continue and not Terminated then
           Synchronize(Ended);
       end
       else
@@ -907,7 +907,7 @@ begin
         end;
 
         SetGrabberStatus(gsStopping);
-        if FContinue and not Terminated then
+        if Continue and not Terminated then
           Synchronize(Ended);
       end;
     except

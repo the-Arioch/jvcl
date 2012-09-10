@@ -64,7 +64,7 @@ type
 
   TJvLoginForm = class;
 
-  TJvCustomLogin = class(TJvCommonDialogF)
+  TJvCustomLogin = class(TJvCommonDialog)
   private
     FActive: Boolean;
     FAttemptNumber: Integer;
@@ -123,7 +123,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     function Login: Boolean; virtual;
-    function Execute: Boolean; override;
+    function Execute(ParentWnd: HWND): Boolean; overload; override;
     procedure TerminateApplication;
     procedure Lock;
     property LoggedUser: string read GetLoggedUser write SetLoggedUser;
@@ -217,8 +217,7 @@ implementation
 
 uses
   Consts,
-  IniFiles,
-  JvJCLUtils, JvJVCLUtils, JvResources, JvConsts;
+  JvJCLUtils, JvResources, JvConsts;
 
 {$R *.dfm}
 
@@ -655,7 +654,7 @@ begin
   FAttempt := 0;
 end;
 
-function TJvCustomLogin.Execute: Boolean;
+function TJvCustomLogin.Execute(ParentWnd: HWND): Boolean;
 begin
   Result := Login;
 end;

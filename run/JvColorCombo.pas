@@ -34,7 +34,6 @@ Known Issues:
 unit JvColorCombo;
 
 {$I jvcl.inc}
-{$I vclonly.inc}
 
 interface
 
@@ -1433,7 +1432,7 @@ begin
     DC := GetDC(HWND_DESKTOP);
     try
       FPixelsPerInch := GetDeviceCaps(DC, LOGPIXELSY);
-      EnumFontFamilies(DC, PChar(FontName), @GetFontSizesEnum, Integer(SizeList));
+      EnumFontFamilies(DC, PChar(FontName), @GetFontSizesEnum, LPARAM(SizeList));
       SizeList.Sort(SizeSort);
     finally
       ReleaseDC(HWND_DESKTOP, DC);

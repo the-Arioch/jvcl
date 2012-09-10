@@ -390,8 +390,11 @@ const
 implementation
 
 uses
-  Consts, RTLConsts, SysUtils, Math, Graphics, Clipbrd,
-  JvUnicodeCanvas, JvJCLUtils, JvThemes, JvConsts, JvResources;
+  SysUtils, Math, Graphics, Clipbrd,
+  {$IFDEF UNICODE}
+  Character,
+  {$ENDIF UNICODE}
+  JvUnicodeCanvas, JvJCLUtils, JvConsts, JvResources;
 
 type
   TJvUndoBufferAccessProtected = class(TJvUndoBuffer);
@@ -628,7 +631,14 @@ begin
   if Len < X then
   begin
     SetLength(BegLine, X - 1);
-    FillChar(BegLine[Len + 1], X - Len - 1, ' ');
+    P := PChar(BegLine) + Len;
+    Len := X - Len - 1;
+    while Len > 0 do
+    begin
+      P^ := ' ';
+      Inc(P);
+      Dec(Len);
+    end;
   end;
 
   JvEditor.LockUpdate;
@@ -946,7 +956,11 @@ var
 begin
   Key := Char(Value);
   WasSelected := (FSelection.IsSelected) and (not PersistentBlocks);
+  {$IFDEF UNICODE}
+  if (Key >= #32) and ((Key <= #$FF) or not TCharacter.IsControl(Char(Value))) then
+  {$ELSE}
   if CharInSet(Key, [#32..#255]) then
+  {$ENDIF UNICODE}
   begin
     if not HasChar(Key, JvEditorCompletionChars) then
       Completion.DoKeyPress(Key);

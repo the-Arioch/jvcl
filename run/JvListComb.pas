@@ -45,7 +45,7 @@ uses
   Windows, Messages,
   SysUtils, Classes, Graphics, Controls, ExtCtrls, StdCtrls, ImgList,
   JvJCLUtils, JvCombobox,
-  JvComponent, JvExControls, JvExStdCtrls;
+  JvExStdCtrls;
 
 type
   TJvButtonColors = (fsLighter, fsLight, fsMedium, fsDark, fsDarker);
@@ -568,7 +568,6 @@ begin
       try
         FOwner := nil;
         S.Delete(Index);
-        // Use FOwner.GetOwner to keep D5/C5 compatibility
         if (SavedOwner.GetOwner is TJvImageListBox) and (TJvImageListBox(SavedOwner.GetOwner).Sorted) then
           S.AddObject(Value, Self)
         else

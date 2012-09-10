@@ -40,6 +40,9 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Messages,
+  {$IFDEF RTL240_UP}
+  System.Generics.Collections,
+  {$ENDIF RTL240_UP}
   Types, Variants, Classes, Graphics, Controls, Forms, DB, DBCtrls,
   JvDBUtils, JvToolEdit, JvComponent, JvExControls;
 
@@ -89,7 +92,7 @@ type
     FMasterField: TField;
     FKeyField: TField;
     FDisplayField: TField;
-    FListFields: TList;
+    FListFields: TList{$IFDEF RTL240_UP}<TField>{$ENDIF RTL240_UP};
     FValue: string;
     FDisplayValue: string;
     FDisplayEmpty: string;
@@ -680,7 +683,7 @@ const
 implementation
 
 uses
-  VDBConsts, StrUtils, DBConsts, SysUtils, Math, MultiMon,
+  VDBConsts, DBConsts, SysUtils, Math, MultiMon,
   JvJCLUtils, JvJVCLUtils, JvThemes, JvTypes, JvConsts, JvResources, JclSysUtils;
 
 procedure CheckLookupFormat(const AFormat: string);
@@ -802,7 +805,7 @@ begin
   FDataLink.FDataControl := Self;
   FLookupLink := TLookupSourceLink.Create;
   FLookupLink.FDataControl := Self;
-  FListFields := TList.Create;
+  FListFields := TList{$IFDEF RTL240_UP}<TField>{$ENDIF RTL240_UP}.Create;
   FEmptyValue := '';
   FEmptyStrIsNull := True;
   FEmptyItemColor := clWindow;
@@ -2381,6 +2384,10 @@ begin
 end;
 
 procedure TJvPopupDataList.CreateParams(var Params: TCreateParams);
+{$IFDEF COMPILER6}
+const
+  CS_DROPSHADOW = $20000;
+{$ENDIF COMPILER6}
 begin
   inherited CreateParams(Params);
   with Params do
@@ -2389,6 +2396,8 @@ begin
     ExStyle := WS_EX_TOOLWINDOW;
     AddBiDiModeExStyle(ExStyle);
     WindowClass.Style := CS_SAVEBITS;
+    if CheckWin32Version(5, 1) then // Windows XP+
+      WindowClass.Style := WindowClass.Style or CS_DROPSHADOW;
   end;
 end;
 

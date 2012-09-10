@@ -28,7 +28,6 @@ Known Issues:
 unit JvToolBar;
 
 {$I jvcl.inc}
-{$I vclonly.inc}
 
 interface
 
@@ -38,8 +37,7 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Messages, CommCtrl, SysUtils, Classes, Graphics, Controls,
   Forms, ComCtrls, Menus,
-  JclBase,
-  JvTypes, JvMenus, JvExComCtrls;
+  JvMenus, JvExComCtrls;
 
 type
   {$IFDEF RTL230_UP}
@@ -85,9 +83,6 @@ const
 {$ENDIF UNITVERSIONING}
 
 implementation
-
-uses
-  JvJVCLUtils;
 
 constructor TJvToolBar.Create(AOwner: TComponent);
 begin

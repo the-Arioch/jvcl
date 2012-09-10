@@ -39,6 +39,9 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Messages, Classes, Controls, Graphics, Forms, ImgList,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvComponentBase;
 
 const
@@ -313,7 +316,7 @@ uses
   {$IFNDEF COMPILER12_UP}
   JvJCLUtils,
   {$ENDIF ~COMPILER12_UP}
-  JvJVCLUtils, JvThemes, JvWndProcHook, JvResources, JvWin32,
+  JvJVCLUtils, JvThemes, JvWndProcHook, JvWin32,
   JclStringConversions, JclUnicode;
 
 const
@@ -1316,7 +1319,8 @@ begin
   if FHandle <> 0 then
     DeallocateHWndEx(FHandle);
 
-  GlobalCtrl.Remove(Self);
+  if GGlobalCtrl <> nil then
+    GlobalCtrl.Remove(Self);
 
   inherited Destroy;
 end;

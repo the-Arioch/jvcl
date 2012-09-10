@@ -47,7 +47,7 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Messages,
   SysUtils, Classes, Graphics, Controls, Forms, ExtCtrls,
-  JvTypes, JvThemes, JvComponent, JvExtComponent, JvExControls,
+  JvTypes, JvThemes, JvExtComponent, JvExControls,
   JvHotTrackPersistent;
 
 type
@@ -156,6 +156,8 @@ type
     FHotTrackFontOptions: TJvTrackFontOptions;
     FHotTrackOptions: TJvHotTrackOptions;
     FLastScreenCursor: TCursor;
+    FPainting: Boolean;
+    FRedrawingChildren: Boolean;
     function GetArrangeSettings: TJvArrangeSettings;
     function GetHeight: Integer;
     procedure SetHeight(Value: Integer);
@@ -360,6 +362,9 @@ const
 implementation
 
 uses
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF}
   Types, {$IFDEF COMPILER7_UP}Themes,{$ENDIF}
   JvJCLUtils, JvJVCLUtils, JvResources;
 
@@ -667,6 +672,8 @@ var
   R: TRect;
   OldPenColor:TColor;
   OldPenWidth: Integer;
+  ControlIndex: Integer;
+  CurControl: TControl;
 begin
   if Assigned(FOnPaint) then
   begin
@@ -674,95 +681,121 @@ begin
     Exit;
   end;
 
-  if MouseOver and HotTrack then
+  // must force child controls to redraw completely, even their non client areas (Mantis 4406)
+  if Transparent and not FPainting and not FRedrawingChildren then
   begin
-    Canvas.Font := Self.HotTrackFont;
-    if HotTrackOptions.Enabled then
-    begin
-      Canvas.Brush.Color := HotTrackOptions.Color;
-      if HotTrackOptions.FrameVisible then
+    FRedrawingChildren := True;
+    try
+      for ControlIndex := 0 to ControlCount - 1 do
       begin
-        Canvas.Brush.Style := bsSolid;
-        OldPenColor := Canvas.Pen.Color;
-        Canvas.Pen.Color := HotTrackOptions.FrameColor;
-        Canvas.Rectangle(0, 0, Width, Height);
-        Canvas.Pen.Color := OldPenColor;
-      end
-      else
-      begin
-        R := ClientRect;
-        InflateRect(R, -BevelWidth, -BevelWidth);
-        Canvas.FillRect(R);
+        CurControl := Controls[ControlIndex];
+        CurControl.Invalidate;
+        if CurControl is TWinControl then
+          RedrawWindow(TWinControl(CurControl).Handle, nil, 0, RDW_FRAME or RDW_INVALIDATE);
+
+        // Must update here so that the invalidate message is processed immediately
+        // If not, there is a very strong risk of creating a refresh loop
+        CurControl.Update;
       end;
+    finally
+      FRedrawingChildren := False;
     end;
-  end
-  else
-  begin
-    Canvas.Font := Self.Font;
-    Canvas.Brush.Color := Color;
-    if not Transparent then
-      DrawThemedBackground(Self, Canvas, ClientRect)
-    else
-      Canvas.Brush.Style := bsClear;
-    if FFlatBorder then
-    begin
-      if BorderWidth > 0 then
-      begin
-        OldPenWidth:= Canvas.Pen.Width;
-        OldPenColor := Canvas.Pen.Color;
-        Canvas.Pen.Width := BorderWidth;
-        Canvas.Pen.Color := FFlatBorderColor;
-        Canvas.Brush.Style := bsClear;
-
-        R := ClientRect;
-        X := (BorderWidth div 2);
-        if Odd(BorderWidth) then
-          Y := X
-        else
-          Y := X -1;
-
-        Inc(R.Left,X);
-        Inc(R.Top,X);
-        Dec(R.Bottom,Y);
-        Dec(R.Right,Y);
-
-        Canvas.Rectangle(R);
-
-        Canvas.Pen.Width := OldPenWidth;
-        Canvas.Pen.Color := OldPenColor;
-     end;
-    end
-    else
-      DrawBorders;
   end;
 
-  DrawCaption;
-  if Sizeable then
-  begin
-    {$IFDEF JVCLThemesEnabled}
-    if {$IFDEF RTL230_UP}StyleServices{$ELSE}ThemeServices{$ENDIF RTL230_UP}.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
-      {$IFDEF RTL230_UP}StyleServices{$ELSE}ThemeServices{$ENDIF RTL230_UP}.DrawElement(Canvas.Handle, {$IFDEF RTL230_UP}StyleServices{$ELSE}ThemeServices{$ENDIF RTL230_UP}.GetElementDetails(tsGripper),
-        Rect(ClientWidth - GetSystemMetrics(SM_CXVSCROLL) - BevelWidth - 2,
-          ClientHeight - GetSystemMetrics(SM_CYHSCROLL) - BevelWidth - 2,
-          ClientWidth - BevelWidth - 2, ClientHeight - BevelWidth - 2))
-    else
-    {$ENDIF JVCLThemesEnabled}
+  FPainting := True;
+  try
+    if MouseOver and HotTrack then
     begin
-      Canvas.Font.Name := 'Marlett';
-      Canvas.Font.Charset := DEFAULT_CHARSET;
-      Canvas.Font.Size := 12;
-      Canvas.Font.Style := [];
-      Canvas.Brush.Style := bsClear;
-      X := ClientWidth - GetSystemMetrics(SM_CXVSCROLL) - BevelWidth - 2;
-      Y := ClientHeight - GetSystemMetrics(SM_CYHSCROLL) - BevelWidth - 2;
-      // (rom) bsClear takes care of that already
-      //if Transparent then
-      //  SetBkMode(Handle, BkModeTransparent);
-      Canvas.Font.Color := clBtnHighlight;
-      Canvas.TextOut(X, Y, 'o');
-      Canvas.Font.Color := clBtnShadow;
-      Canvas.TextOut(X, Y, 'p');
+      Canvas.Font := Self.HotTrackFont;
+      if HotTrackOptions.Enabled then
+      begin
+        Canvas.Brush.Color := HotTrackOptions.Color;
+        if HotTrackOptions.FrameVisible then
+        begin
+          Canvas.Brush.Style := bsSolid;
+          OldPenColor := Canvas.Pen.Color;
+          Canvas.Pen.Color := HotTrackOptions.FrameColor;
+          Canvas.Rectangle(0, 0, Width, Height);
+          Canvas.Pen.Color := OldPenColor;
+        end
+        else
+        begin
+          R := ClientRect;
+          InflateRect(R, -BevelWidth, -BevelWidth);
+          Canvas.FillRect(R);
+        end;
+      end;
+    end
+    else
+    begin
+      Canvas.Font := Self.Font;
+      Canvas.Brush.Color := Color;
+      if not Transparent then
+        DrawThemedBackground(Self, Canvas, ClientRect)
+      else
+        Canvas.Brush.Style := bsClear;
+      if FFlatBorder then
+      begin
+        if BorderWidth > 0 then
+        begin
+          OldPenWidth:= Canvas.Pen.Width;
+          OldPenColor := Canvas.Pen.Color;
+          Canvas.Pen.Width := BorderWidth;
+          Canvas.Pen.Color := FFlatBorderColor;
+          Canvas.Brush.Style := bsClear;
+
+          R := ClientRect;
+          X := (BorderWidth div 2);
+          if Odd(BorderWidth) then
+            Y := X
+          else
+            Y := X -1;
+
+          Inc(R.Left,X);
+          Inc(R.Top,X);
+          Dec(R.Bottom,Y);
+          Dec(R.Right,Y);
+
+          Canvas.Rectangle(R);
+
+          Canvas.Pen.Width := OldPenWidth;
+          Canvas.Pen.Color := OldPenColor;
+       end;
+      end
+      else
+        DrawBorders;
     end;
+
+    DrawCaption;
+    if Sizeable then
+    begin
+      {$IFDEF JVCLThemesEnabled}
+      if {$IFDEF RTL230_UP}StyleServices{$ELSE}ThemeServices{$ENDIF RTL230_UP}.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
+        {$IFDEF RTL230_UP}StyleServices{$ELSE}ThemeServices{$ENDIF RTL230_UP}.DrawElement(Canvas.Handle, {$IFDEF RTL230_UP}StyleServices{$ELSE}ThemeServices{$ENDIF RTL230_UP}.GetElementDetails(tsGripper),
+          Rect(ClientWidth - GetSystemMetrics(SM_CXVSCROLL) - BevelWidth - 2,
+            ClientHeight - GetSystemMetrics(SM_CYHSCROLL) - BevelWidth - 2,
+            ClientWidth - BevelWidth - 2, ClientHeight - BevelWidth - 2))
+      else
+      {$ENDIF JVCLThemesEnabled}
+      begin
+        Canvas.Font.Name := 'Marlett';
+        Canvas.Font.Charset := DEFAULT_CHARSET;
+        Canvas.Font.Size := 12;
+        Canvas.Font.Style := [];
+        Canvas.Brush.Style := bsClear;
+        X := ClientWidth - GetSystemMetrics(SM_CXVSCROLL) - BevelWidth - 2;
+        Y := ClientHeight - GetSystemMetrics(SM_CYHSCROLL) - BevelWidth - 2;
+        // (rom) bsClear takes care of that already
+        //if Transparent then
+        //  SetBkMode(Handle, BkModeTransparent);
+        Canvas.Font.Color := clBtnHighlight;
+        Canvas.TextOut(X, Y, 'o');
+        Canvas.Font.Color := clBtnShadow;
+        Canvas.TextOut(X, Y, 'p');
+      end;
+    end;
+  finally
+    FPainting := False;
   end;
 end;
 

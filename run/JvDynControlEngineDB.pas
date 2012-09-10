@@ -163,7 +163,7 @@ implementation
 
 uses
   Variants, SysUtils, TypInfo,
-  JvResources, JvTypes, JvDynControlEngineIntf, JvDynControlEngineVCLDB;
+  JvResources, JvTypes, JvDynControlEngineIntf;
 
 var
   GlobalDefaultDynControlEngineDB: TJvDynControlEngineDB = nil;
@@ -587,6 +587,7 @@ end;
 
 function DefaultDynControlEngineDB: TJvDynControlEngineDB;
 begin
+  Assert(Assigned(GlobalDefaultDynControlEngineDB),'JvDynControlEngineDB: DefaultDynControlEngineDB not definded');
   Result := GlobalDefaultDynControlEngineDB;
 end;
 

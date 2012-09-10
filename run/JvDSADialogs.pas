@@ -51,9 +51,9 @@ type
     FTimer: TTimer;
     FCountdown: IJvDynControlCaption;
     FMsg: string;
-    FDefaultButton: {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF};
+    FDefaultButton: {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF};
   protected
-    property DefaultButton: {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF} read FDefaultButton write FDefaultButton ;
+    property DefaultButton: {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF} read FDefaultButton write FDefaultButton ;
     procedure CustomKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure CustomMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure CustomShow(Sender: TObject);
@@ -478,7 +478,7 @@ const
 implementation
 
 uses
-  Consts, Math, TypInfo,
+  Types, Consts, Math, TypInfo,
   {$IFDEF MSWINDOWS}
   JclRegistry,
   {$ENDIF MSWINDOWS}
@@ -570,8 +570,8 @@ begin
     WriteToClipboard(GetFormText);
   end;
   if Key = VK_RETURN then
-    if ActiveControl is {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF} then
-      {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF}(ActiveControl).Click
+    if ActiveControl is {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF} then
+      {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF}(ActiveControl).Click
     else if Assigned(DefaultButton) then
       DefaultButton.Click;
 end;
@@ -586,16 +586,16 @@ procedure TDSAMessageForm.CustomShow(Sender: TObject);
 var
   I: Integer;
   First : Boolean;
-  Btn : {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF};
+  Btn : {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF};
 begin
   if Timeout <> 0 then
     FTimer.Enabled := True;
   First := True;
   for I := 0 to ComponentCount - 1 do
   begin
-    if (Components[i] is {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF}) then
+    if (Components[i] is {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF}) then
     begin
-      Btn := (Components[i] as {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF});
+      Btn := (Components[i] as {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF});
       if First then
       begin
         First := False;
@@ -629,9 +629,9 @@ begin
       FTimer.Enabled := False;
       for I := 0 to ComponentCount - 1 do
       begin
-        if (Components[i] is {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF}) and (Components[i] as {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF}).Default then
+        if (Components[i] is {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF}) and (Components[i] as {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF}).Default then
         begin
-          (Components[i] as {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF}).Click;
+          (Components[i] as {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF}).Click;
           Exit;
         end;
       end;
@@ -685,7 +685,7 @@ var
 begin
   DividerLine := StringOfChar('-', 27) + CrLf;
   for I := 0 to ComponentCount - 1 do
-    if Components[i] is {$IFDEF DELPHI12}TCustomButton{$ELSE}TButton{$ENDIF} then
+    if Components[i] is {$IFDEF RTL200_UP}TCustomButton{$ELSE}TButton{$ENDIF} then
       ButtonCaptions := ButtonCaptions + TButton(Components[i]).Caption + StringOfChar(' ', 3);
   ButtonCaptions := StringReplace(ButtonCaptions, '&', '', [rfReplaceAll]);
   Result := Format('%s%s%s%s%s%s%s%s%s%s', [DividerLine, Caption, CrLf, DividerLine,
@@ -779,11 +779,7 @@ var
   MainPanel : TWinControl;
   DynControlAutoSize: IJvDynControlAutoSize;
 
-  {$IFDEF COMPILER12_UP}
-  procedure CalcTextRect (iSingle : Boolean; lpString: PWideChar; nCount: Integer;var lpRect: TRect);
-  {$ELSE}
-  procedure CalcTextRect (iSingle : Boolean; lpString: PChar; nCount: Integer;var lpRect: TRect);
-  {$ENDIF}
+  procedure CalcTextRect(iSingle: Boolean; lpString: PChar; nCount: Integer; var lpRect: TRect);
   begin
     if iSingle then
       DrawText(ResultForm.Canvas.Handle, lpString, nCount, lpRect,
@@ -793,7 +789,7 @@ var
           DT_EXPANDTABS or DT_CALCRECT or DT_WORDBREAK or ResultForm.DrawTextBiDiModeFlagsReadingOnly);
   end;
 
-  Procedure ResizeResultForm;
+  procedure ResizeResultForm;
   begin
     ResultForm.ClientWidth := Max(TimeoutTextWidth,
                                   Max(17 + ChkTextWidth,
@@ -814,8 +810,6 @@ var
     ResultForm.Left := (CenterParWidth div 2) - (ResultForm.Width div 2) + CenterParLeft;
     ResultForm.Top := (CenterParHeight div 2) - (ResultForm.Height div 2) + CenterParTop;
   end;
-
-
 
 begin
   ResultForm := nil;
@@ -985,8 +979,10 @@ begin
       Button := DynControlEngine.CreateButton(ResultForm, BottomPanel, 'Button' + IntToStr(I), Buttons[I], '', nil, False, False);
       Button.ModalResult := Results[I];
       if I = DefaultButton then
+      begin
         ResultForm.DefaultButton := Button;
-//        Button.Default := True;
+        Button.Default := True;
+      end;
       if I = CancelButton then
         Button.Cancel := True;
       Button.TabStop := True;
@@ -2224,10 +2220,6 @@ end;
 function GetShowModalVMTOffset: Integer;
 asm
   MOV EAX, VMTOFFSET TCustomForm.ShowModal
-  {$IFDEF CPUX64}
-  {$MESSAGE WARN 'Remove the "SHL EAX, 1" after VMTOFFSET is fixed in the dcc64 compiler'}
-  SHL EAX, 1
-  {$ENDIF CPUX64}
 end;
 
 function GetShowModalVMTIndex: Integer; //  Locate the VMT index of ShowModal

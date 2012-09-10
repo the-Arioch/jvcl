@@ -41,7 +41,6 @@ uses
   Windows,
   {$ENDIF MSWINDOWS}
   Classes, Graphics,
-  JclBase,
   JvComponent, JvTypes;
 
 // Additional color values for unlit color settings (TUnlitColor type)
@@ -504,16 +503,12 @@ end;
 {$IFDEF MSWINDOWS}
 var
   I: Integer;
-  M: TMemoryBasicInformation;
 begin
   with DigitClassList.LockList do
   try
     for I := Count - 1 downto 0 do
-    begin
-      VirtualQuery(Items[I], M, SizeOf(M));
-      if (Module = 0) or (HMODULE(M.AllocationBase) = Module) then
+      if (Module = 0) or (HMODULE(FindHInstance(Items[I])) = Module) then
         Delete(I);
-    end;
   finally
     DigitClassList.UnlockList;
   end;

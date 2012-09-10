@@ -41,13 +41,12 @@ uses
   Libc,
   {$ENDIF HAS_UNIT_LIBC}
   Classes,
-  JclBase,
   JvAppStorage, JvPropertyStore, JvSimpleXml, JvTypes, JclStreams;
 
 type
   TJvCustomAppXMLStorage = class;
 
-  TJvAppXMLStorageOptions = class(TJvAppStorageOptions)
+  TJvAppXMLStorageOptions = class(TJvAppFileStorageOptions)
   private
     FAutoEncodeEntity: Boolean;
     FAutoEncodeValue: Boolean;
@@ -70,6 +69,24 @@ type
     constructor Create; override;
     procedure Assign(Source: TPersistent); override;
   published
+    property BooleanStringTrueValues;
+    property BooleanStringFalseValues;
+    property BooleanAsString;
+    property EnumerationAsString;
+    property TypedIntegerAsString;
+    property SetAsString;
+    property DateTimeAsString;
+    property FloatAsString;
+    property DefaultIfReadConvertError;
+    property DefaultIfValueNotExists;
+    property StoreDefaultValues;
+    property UseOldItemNameFormat;
+    property UseTranslateStringEngineDateTimeFormats;
+    property BackupType;
+    property BackupKeepFileAfterFlush;
+    property BackupHistoryCount;
+    property BackupHistoryType;
+
     //Flag to determine if a stringlist should be stored as single string and not as list of string items
     property StoreStringListAsSingleString;
     property WhiteSpaceReplacement: string read FWhiteSpaceReplacement write SetWhiteSpaceReplacement;
@@ -160,12 +177,11 @@ type
   [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
   {$ENDIF RTL230_UP}
   TJvAppXMLFileStorage = class(TJvCustomAppXMLStorage)
-  private
-    procedure FlushInternal;
-    procedure ReloadInternal;
+  protected
+    procedure ClearInternal; override;
+    procedure FlushInternal; override;
+    procedure ReloadInternal; override;
   public
-    procedure Flush; override;
-    procedure Reload; override;
     property Xml;
     property AsString;
   published
@@ -205,7 +221,7 @@ implementation
 uses
   SysUtils, TypInfo,
   JclStrings,
-  JvJCLUtils, JvConsts, JvResources;
+  JvJCLUtils, JvResources;
 
 const
   cNullDigit = '0';
@@ -562,6 +578,9 @@ var
   StrValue: string;
   Node: TJvSimpleXmlElem;
   ValueElem: TJvSimpleXMLElem;
+  {$IFDEF CPUX64}
+  Ext80Value: Extended80;
+  {$ENDIF CPUX64}
 begin
   ReloadIfNeeded;
   SplitKeyPath(Path, ParentPath, ValueName);
@@ -573,8 +592,18 @@ begin
   begin
     try
       StrValue := ValueElem.Value;
-      // Result := StrToFloat(StrValue);
+      {$IFDEF CPUX64}
+      // Keep backward compatiblity to x86 Extended type
+      if BinStrToBuf(StrValue, @Ext80Value, SizeOf(Ext80Value)) = SizeOf(Ext80Value) then
+        try
+          Result := Ext80Value
+        except
+          Result := Default;
+        end
+      else
+      {$ELSE}
       if BinStrToBuf(StrValue, @Result, SizeOf(Result)) <> SizeOf(Result) then
+      {$ENDIF CPUX64}
         Result := Default;
     except
       if StorageOptions.DefaultIfReadConvertError then
@@ -596,6 +625,9 @@ var
   ValueName: string;
   Node: TJvSimpleXmlElem;
   ValueElem: TJvSimpleXMLElem;
+  {$IFDEF CPUX64}
+  Ext80Value: Extended80;
+  {$ENDIF CPUX64}
 begin
   ReloadIfNeeded;
   SplitKeyPath(Path, ParentPath, ValueName);
@@ -603,8 +635,15 @@ begin
   Xml.Options := Xml.Options + [sxoAutoCreate];
   ValueElem := GetValueElementFromNode(Node, ValueName);
   if Assigned(ValueElem) then
-    ValueElem.Value :=
-    BufToBinStr(@Value, SizeOf(Value));
+  begin
+    {$IFDEF CPUX64}
+    // Keep backward compatiblity to x86 Extended type
+    Ext80Value := Value;
+    ValueElem.Value := BufToBinStr(@Ext80Value, SizeOf(Ext80Value));
+    {$ELSE}
+    ValueElem.Value := BufToBinStr(@Value, SizeOf(Value));
+    {$ENDIF CPUX64}
+  end;
   Xml.Options := Xml.Options - [sxoAutoCreate];
   FlushIfNeeded;
 end;
@@ -1016,47 +1055,14 @@ begin
   // No Write necessary
 end;
 
-//=== { TJvAppXMLFileStorage } ===============================================
-
-procedure TJvAppXMLFileStorage.Flush;
-var
-  Path: string;
+procedure TJvAppXMLFileStorage.ClearInternal;
 begin
-  if (FullFileName <> '') and not ReadOnly and not (csDesigning in ComponentState) then
-  begin
-    try
-      Path := ExtractFilePath(FullFileName);
-      if Path <> '' then
-        ForceDirectories(Path);
-      if SynchronizeFlushReload then
-        Synchronize(FlushInternal, FullFileName)
-      else
-        FlushInternal;
-    except
-      on E: Exception do
-        DoError(E.Message);
-    end;
-  end;
+  Xml.Root.Clear;
 end;
 
 procedure TJvAppXMLFileStorage.FlushInternal;
 begin
   Xml.SaveToFile(FullFileName, StorageOptions.Encoding, StorageOptions.CodePage);
-end;
-
-procedure TJvAppXMLFileStorage.Reload;
-begin
-  if not IsUpdating and not (csDesigning in ComponentState) then
-  begin
-    inherited Reload;
-    if FileExists(FullFileName) then
-      if SynchronizeFlushReload then
-        Synchronize(ReloadInternal, FullFileName)
-      else
-        ReloadInternal
-    else // file may have disappeared. If so, clear the root element
-      Xml.Root.Clear;
-  end;
 end;
 
 procedure TJvAppXMLFileStorage.ReloadInternal;
@@ -1079,6 +1085,8 @@ begin
   try
     AppStorage.StorageOptions.WhiteSpaceReplacement := '_';
     AppStorage.StorageOptions.UseOldItemNameFormat := False;
+    AppStorage.FlushOnDestroy := False;
+    AppStorage.SynchronizeFlushReload := True;
     if Assigned(AStorageOptions) then
       AppStorage.StorageOptions.Assign(AStorageOptions);
     AppStorage.Location := flCustom;
@@ -1111,6 +1119,8 @@ begin
   try
     AppStorage.StorageOptions.WhiteSpaceReplacement := '_';
     AppStorage.StorageOptions.UseOldItemNameFormat := False;
+    AppStorage.FlushOnDestroy := False;
+    AppStorage.SynchronizeFlushReload := True;
     if Assigned(AStorageOptions) then
       AppStorage.StorageOptions.Assign(AStorageOptions);
     AppStorage.Location := flCustom;

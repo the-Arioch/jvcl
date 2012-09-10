@@ -42,7 +42,7 @@ uses
   {$ENDIF UNITVERSIONING}
   SysUtils, Classes,
   Windows, Messages, CommCtrl, ComCtrls, Controls, ExtCtrls, Graphics, Forms,
-  JvEdit, JvExMask, JvMaskEdit, JvComponent, JvDataSourceIntf;
+  JvExMask, JvComponent, JvDataSourceIntf;
 
 const
   DefaultInitRepeatPause = 400; { pause before repeat timer (ms) }
@@ -496,15 +496,14 @@ const
 implementation
 
 uses
-  Consts,
-  JvThemes,
+  Types, JvThemes,
   {$IFDEF JVCLThemesEnabled}
   UxTheme,
   {$IFNDEF COMPILER7_UP}
   TmSchema,
   {$ENDIF !COMPILER7_UP}
   {$ENDIF JVCLThemesEnabled}
-  JvJCLUtils, JvJVCLUtils, JvConsts, JvResources, JvToolEdit, JclStrings, JclSysUtils;
+  JvJCLUtils, JvJVCLUtils, JvConsts, JvResources, JclStrings, JclSysUtils;
 
 {$R JvSpin.Res}
 

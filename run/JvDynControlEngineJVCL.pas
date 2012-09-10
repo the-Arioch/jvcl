@@ -24,7 +24,11 @@ Known Issues:
 unit JvDynControlEngineJVCL;
 
 {$I jvcl.inc}
-{$I vclonly.inc}
+
+{$IFDEF SUPPORTS_PLATFORM_WARNINGS}
+  {$WARN UNIT_PLATFORM OFF}
+  {$WARN SYMBOL_PLATFORM OFF}
+{$ENDIF SUPPORTS_PLATFORM_WARNINGS}
 
 interface
 
@@ -36,6 +40,9 @@ uses
   Classes,
   Controls, StdCtrls, ExtCtrls, Mask, Forms,
   Buttons, Dialogs, FileCtrl,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvMaskEdit, JvDateTimePicker, JvBitBtn, JvCheckBox, JvBaseEdits,
   JvLabel, JvListBox, JvMemo, JvRichEdit, JvPanel, JvRadioGroup, JvToolEdit,
   JvScrollBox, JvStaticText, JvCombobox, JvImage, JvSpin, JvCheckListBox,
@@ -2338,8 +2345,11 @@ end;
 
 procedure TJvDynControlJVCLComboBox.ControlSetValue(Value: Variant);
 begin
-  if (Style = csDropDownList) and VarIsInt(Value) then
-    ItemIndex := Items.IndexOf(Value)
+  if (Style = csDropDownList) then
+    if VarIsInt(Value) then
+      ItemIndex := VarToInt(Value)
+    else
+      ItemIndex := Items.IndexOf(VarToStr(Value))
   else
     Text := VarToStr(Value);
 end;
@@ -3303,9 +3313,7 @@ begin
   RegisterControlType(jctProgressbar, TJvDynControlJVCLProgressbar);
   RegisterControlType(jctTabControl, TJvDynControlJVCLTabControl);
   RegisterControlType(jctPageControl, TJvDynControlJVCLPageControl);
-  {$IFDEF DELPHI6_UP}
   RegisterControlType(jctColorComboBox, TJvDynControlVCLColorComboBox);
-  {$ENDIF DELPHI6_UP}
 end;
 
 procedure TJvDynControlJVCLTabControl.ControlCreateTab(const AName: string);

@@ -548,7 +548,7 @@ const
 implementation
 
 uses
-  SysUtils, Math, {AppEvnts,} JvJVCLUtils,
+  Types, SysUtils, Math, ImgList, {AppEvnts,} JvJVCLUtils,
   JvDockSupportProc;
 
 type
@@ -748,6 +748,9 @@ begin
   FVSChannel := AOwner;
   FVSPanes := TObjectList.Create;
   FImageList := TImageList.CreateSize(16, 16);
+  {$IFDEF RTL200_UP}
+  FImageList.ColorDepth := cd32Bit;
+  {$ENDIF RTL200_UP}
   FInactiveBlockWidth := 24;
   FActiveBlockWidth := 24;
 end;
@@ -1471,7 +1474,7 @@ var
       Canvas.FrameRect(DrawRect);
 
       AdjustImagePos;
-      Block.FImageList.Draw(Canvas, DrawRect.Left, DrawRect.Top, I);
+      Block.FImageList.Draw(Canvas, DrawRect.Left, DrawRect.Top, I, dsTransparent, itImage);
 
       if Block.ActivePane = Block.VSPane[I] then
       begin

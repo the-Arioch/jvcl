@@ -44,11 +44,11 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  Windows, Messages, Contnrs, Graphics, Controls, Forms,
-  Classes, 
+  Windows, Messages, Graphics, Controls, Forms,
+  Classes,
   Menus, ComCtrls, ImgList, Buttons, Types, CommCtrl,
   JvJVCLUtils, JvComponentBase, JvComponent, JvExControls, JvExComCtrls, JvWin32,
-  JvToolEdit, JvDataSourceIntf;
+  JvDataSourceIntf;
 
 const
   JvDefPageControlBorder = 4;
@@ -58,6 +58,8 @@ const
   WM_CHECKSTATECHANGED = WM_USER + 1;
 
   JvDefaultTreeViewMultiSelectStyle = [msControlSelect, msShiftSelect, msVisibleOnly];
+
+  JvIP4_127_0_0_1 = 2130706433;
 
 type
   TJvIPAddress = class;
@@ -86,19 +88,31 @@ type
     procedure DefaultHandler(var Msg); override;
   end;
 
+  TJvIPAddressComponentIndex = 1..4; // Numeration is backward, according to intel bytes order and MSDN FIRST_IPADDRESS
+
   TJvIPAddressRange = class(TPersistent)
   private
     FControl: TWinControl;
     FRange: array [0..3] of TJvIPAddressMinMax;
-    function GetMaxRange(Index: Integer): Byte;
-    function GetMinRange(Index: Integer): Byte;
+    function GetMaxRange(Index: Integer): Byte; {$IFDEF SUPPORTS_INLINE}inline;{$ENDIF}
+    function GetMinRange(Index: Integer): Byte; {$IFDEF SUPPORTS_INLINE}inline;{$ENDIF}
     procedure SetMaxRange(const Index: Integer; const Value: Byte);
     procedure SetMinRange(const Index: Integer; const Value: Byte);
+    {$IFOPT R+}
+    procedure CheckIndex(const I: TJvIPAddressComponentIndex);
+    {$ENDIF}
+    function GetCheckedMaxRange(I: TJvIPAddressComponentIndex): Byte; {$IFOPT R-}{$IFDEF SUPPORTS_INLINE}inline;{$ENDIF}{$ENDIF}
+    function GetCheckedMinRange(I: TJvIPAddressComponentIndex): Byte; {$IFOPT R-}{$IFDEF SUPPORTS_INLINE}inline;{$ENDIF}{$ENDIF}
+    procedure SetCheckedMaxRange(I: TJvIPAddressComponentIndex; const Value: Byte); {$IFOPT R-}{$IFDEF SUPPORTS_INLINE}inline;{$ENDIF}{$ENDIF}
+    procedure SetCheckedMinRange(I: TJvIPAddressComponentIndex; const Value: Byte); {$IFOPT R-}{$IFDEF SUPPORTS_INLINE}inline;{$ENDIF}{$ENDIF}
   protected
     procedure AssignTo(Dest: TPersistent); override;
     procedure Change(Index: Integer);
+
   public
     constructor Create(Control: TWinControl);
+    property Min[I: TJvIPAddressComponentIndex]: Byte read GetCheckedMinRange write SetCheckedMinRange;
+    property Max[I: TJvIPAddressComponentIndex]: Byte read GetCheckedMaxRange write SetCheckedMaxRange;
   published
     property Field1Min: Byte index 0 read GetMinRange write SetMinRange default 0;
     property Field1Max: Byte index 0 read GetMaxRange write SetMaxRange default 255;
@@ -114,29 +128,32 @@ type
     FieldRange: TJvIPAddressMinMax; var Value: Integer) of object;
   TJvIPAddressChanging = procedure(Sender: TObject; Index: Integer; Value: Byte; var AllowChange: Boolean) of object;
 
-  TJvIPAddressValues = class(TPersistent)
+  TJvIPAddressValues = class(TObject)
   private
-    FValues: array [0..3] of Byte;
     FOnChange: TNotifyEvent;
     FOnChanging: TJvIPAddressChanging;
-    function GetValue: Cardinal;
-    procedure SetValue(const AValue: Cardinal);
+    FOwner: TJvIPAddress;
+
+    function GetAddress: Cardinal;
+    procedure SetAddress(const AValue: Cardinal);
     procedure SetValues(Index: Integer; Value: Byte);
     function GetValues(Index: Integer): Byte;
   protected
-    procedure Change; virtual;
-    function Changing(Index: Integer; Value: Byte): Boolean; virtual;
+    procedure Change;
+    function Changing(Index: Integer; Value: Byte): Boolean;
   public
+    constructor Create(AOwner: TJvIpAddress);
+
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
     property OnChanging: TJvIPAddressChanging read FOnChanging write FOnChanging;
-  published
-    property Address: Cardinal read GetValue write SetValue;
+
+    property Address: Cardinal read GetAddress write SetAddress;
     property Value1: Byte index 0 read GetValues write SetValues;
     property Value2: Byte index 1 read GetValues write SetValues;
     property Value3: Byte index 2 read GetValues write SetValues;
     property Value4: Byte index 3 read GetValues write SetValues;
   end;
-
+  
   TJvIPAddressDataConnector = class(TJvFieldDataConnector)
   private
     FEditControl: TJvIPAddress;
@@ -148,6 +165,13 @@ type
     constructor Create(AEditControl: TJvIPAddress);
   end;
 
+  // declare externally to avoid Code Completion going crazy
+  TJvIPAddressDual = packed record
+  case byte of
+    0: (Address: LongWord);
+    1: (Comps: array[TJvIPAddressComponentIndex] of Byte);
+  end;
+
   {$IFDEF RTL230_UP}
   [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
   {$ENDIF RTL230_UP}
@@ -155,10 +179,11 @@ type
   private
     FEditControls: array [0..3] of TJvIPEditControlHelper;
     FEditControlCount: Integer;
-    FAddress: LongWord;
-    FChanging: Boolean;
+
+    FAddress: TJvIPAddressDual;
     FRange: TJvIPAddressRange;
     FAddressValues: TJvIPAddressValues;
+    FChanging: Boolean;
     FSaveBlank: Boolean;
     FTabThroughFields: Boolean;
     FLocalFont: HFONT;
@@ -166,13 +191,14 @@ type
     FOnChange: TNotifyEvent;
     FFocusFromField: Boolean;
     FDataConnector: TJvIPAddressDataConnector;
-    
+
     procedure SetDataConnector(const Value: TJvIPAddressDataConnector);
     procedure ClearEditControls;
     procedure DestroyLocalFont;
     procedure SetAddress(const Value: LongWord);
     procedure SetAddressValues(const Value: TJvIPAddressValues);
     procedure CNCommand(var Msg: TWMCommand); message CN_COMMAND;
+    procedure CMEnabledChanged(var Message: TMessage); message CM_ENABLEDCHANGED;
     procedure CNNotify(var Msg: TWMNotify); message CN_NOTIFY;
     procedure WMDestroy(var Msg: TWMNCDestroy); message WM_DESTROY;
     procedure WMParentNotify(var Msg: TWMParentNotify); message WM_PARENTNOTIFY;
@@ -184,6 +210,9 @@ type
     procedure WMKeyDown(var Msg: TWMKeyDown); message WM_KEYDOWN;
     procedure WMKeyUp(var Msg: TWMKeyUp); message WM_KEYUP;
     procedure SelectTabControl(Previous: Boolean);
+    procedure SetBlank(const Value: Boolean);
+    procedure DFMSkipLegacyAddressValues(Reader: TReader);
+    procedure DoNotSetRange(const Value: TJvIPAddressRange);
   protected
     procedure GetDlgCode(var Code: TDlgCodes); override;
     procedure EnabledChanged; override;
@@ -194,28 +223,36 @@ type
     function GetControlExtents: TRect; override;
     procedure CreateParams(var Params: TCreateParams); override;
     procedure CreateWnd; override;
-    procedure DestroyWnd; override;
+    procedure DefineProperties(Filer: TFiler); override;
     procedure DoChange; dynamic;
     procedure Paint; override;
 
     procedure DoAddressChange(Sender: TObject); virtual;
-    procedure DoAddressChanging(Sender: TObject; Index: Integer;
-      Value: Byte; var AllowChange: Boolean); virtual;
+    procedure DoAddressChanging(Sender: TObject; Index: Integer; Value: Byte; var AllowChange: Boolean); virtual;
     procedure DoFieldChange(FieldIndex: Integer; var FieldValue: Integer); dynamic;
+    procedure PushAddressToWindows; {$IFDEF SUPPORTS_INLINE}inline;{$ENDIF}
 
     procedure UpdateValuesFromString(S: string);
+    function GetAddressValue(Component: TJvIPAddressComponentIndex): Byte; {$IFDEF SUPPORTS_INLINE}inline;{$ENDIF}
+    procedure SetAddressValue(Component: TJvIPAddressComponentIndex; const Value: Byte);
 
     procedure KeyPress(var Key: Char); override;
     procedure DoExit; override;
     function CreateDataConnector: TJvIPAddressDataConnector; virtual;
+    function IsNotBlank: Boolean; {$IFDEF SUPPORTS_INLINE}inline;{$ENDIF} // for DFM storage
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+
     procedure ClearAddress;
     function IsBlank: Boolean;
+    property AddressValue[Component: TJvIPAddressComponentIndex]: Byte read GetAddressValue write SetAddressValue;
+
+    // this property is only here for bacwkard compatibility, please use .AddressValue[Index] and .Address instead
+    property AddressValues: TJvIPAddressValues read FAddressValues write SetAddressValues stored False;
   published
-    property Address: LongWord read FAddress write SetAddress default 0;
-    property AddressValues: TJvIPAddressValues read FAddressValues write SetAddressValues;
+    property Address: LongWord read FAddress.Address write SetAddress stored IsNotBlank default JvIP4_127_0_0_1;
+    property AddressIsBlank: boolean read IsBlank write SetBlank default false;
     property Anchors;
     property AutoSize;
     property Color;
@@ -236,12 +273,12 @@ type
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
-    property Range: TJvIPAddressRange read FRange write FRange;
+    property Range: TJvIPAddressRange read FRange write DoNotSetRange {To make DFM store vaules};
     property ShowHint;
     property TabOrder;
     property TabStop default True;
     property TabThroughFields: Boolean read FTabThroughFields write FTabThroughFields default True;
-    property Text;
+    property Text stored false;  // duplicate of Address
     property Visible;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
     property OnContextPopup;
@@ -251,7 +288,7 @@ type
     property OnEndDrag;
     property OnEnter;
     property OnExit;
-    property OnFieldChange: TJvIpAddrFieldChangeEvent read FOnFieldChange write FOnFieldChange;
+    property OnFieldChange: TJvIpAddrFieldChangeEvent read FOnFieldChange write FOnFieldChange; // user change, not programming change
     property OnKeyDown;
     property OnKeyPress;
     property OnKeyUp;
@@ -508,10 +545,14 @@ type
     property OnCheckedChange: TNotifyEvent read FOnCheckedChange write FOnCheckedChange;
   end;
 
+  TJvNodeSelectCause = (nscUnknown = TVC_UNKNOWN, nscMouse = TVC_BYMOUSE, nscKeyboard = TVC_BYKEYBOARD);
+
   TPageChangedEvent = procedure(Sender: TObject; Item: TTreeNode; Page: TTabSheet) of object;
   TJvTreeViewComparePageEvent = procedure(Sender: TObject; Page: TTabSheet;
     Node: TTreeNode; var Matches: Boolean) of object;
   TJvTreeViewNodeCheckedChange = procedure(Sender: TObject; Node: TJvTreeNode) of object;
+  TJvTreeViewSelectionChangingEvent = procedure(Sender: TObject; OldNode, NewNode: TJvTreeNode;
+    Cause: TJvNodeSelectCause; var Allow: Boolean) of object;
 
   {$IFDEF RTL230_UP}
   [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
@@ -523,6 +564,7 @@ type
     FOnCustomDrawItem: TTVCustomDrawItemEvent;
     FOnEditCancelled: TNotifyEvent;
     FOnSelectionChange: TNotifyEvent;
+    FOnSelectionChanging: TJvTreeViewSelectionChangingEvent;
     FCheckBoxes: Boolean;
     FOnHScroll: TNotifyEvent;
     FOnVScroll: TNotifyEvent;
@@ -536,6 +578,7 @@ type
     FOnNodeCheckedChange: TJvTreeViewNodeCheckedChange;
     FCheckEventsDisabled: Boolean;
     FRecreateCheckedState: array of Boolean;
+    FForceClickSelect: Boolean;
 
     procedure InternalCustomDrawItem(Sender: TCustomTreeView;
       Node: TTreeNode; State: TCustomDrawState; var DefaultDraw: Boolean);
@@ -582,6 +625,7 @@ type
     procedure DoExit; override;
     procedure DoEndDrag(Target: TObject; X, Y: Integer); override;
     procedure DoSelectionChange; dynamic;
+    function DoSelectionChanging(OldNode, NewNode: TJvTreeNode; Cause: TJvNodeSelectCause): Boolean; virtual;
     procedure DragOver(Source: TObject; X, Y: Integer; State: TDragState;
       var Accept: Boolean); override;
     procedure Edit(const Item: TTVItem); override;
@@ -596,6 +640,8 @@ type
     property ScrollDirection: Integer read FScrollDirection write SetScrollDirection;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure DblClick; override;
+    function GetCheckedFromState(Node: TTreeNode): Boolean; virtual;
+    procedure SetCheckedInState(Node: TTreeNode; Value: Boolean); virtual;
   public
     constructor Create(AOwner: TComponent); override;
     function IsNodeSelected(Node: TTreeNode): Boolean;
@@ -631,6 +677,7 @@ type
     property ItemHeight: Integer read GetItemHeight write SetItemHeight default 16;
     property Menu: TMenu read FMenu write SetMenu;
     property MenuDblClick: Boolean read FMenuDblClick write FMenuDblClick default False;
+    property ForceClickSelect: Boolean read FForceClickSelect write FForceClickSelect default True;
     property HintColor;
     property ItemIndex: Integer read GetItemIndex write SetItemIndex stored False;
     property Checkboxes: Boolean read FCheckBoxes write SetCheckBoxes default False;
@@ -648,10 +695,12 @@ type
     property OnCustomDrawItem: TTVCustomDrawItemEvent read FOnCustomDrawItem write FOnCustomDrawItem;
     property OnEditCancelled: TNotifyEvent read FOnEditCancelled write FOnEditCancelled;
     property OnSelectionChange: TNotifyEvent read FOnSelectionChange write FOnSelectionChange;
-
+    property OnSelectionChanging: TJvTreeViewSelectionChangingEvent read FOnSelectionChanging write FOnSelectionChanging;
     property OnNodeCheckedChange: TJvTreeViewNodeCheckedChange read FOnNodeCheckedChange write FOnNodeCheckedChange;
   end;
 
+const
+  TVIS_CHECKED = $2000;
 
 {$IFDEF UNITVERSIONING}
 const
@@ -666,12 +715,12 @@ const
 implementation
 
 uses
-  SysUtils, Math,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
+  SysUtils, Math, StrUtils,
   JclStrings,
   JvConsts, JvThemes, JvJCLUtils;
-
-const
-  TVIS_CHECKED = $2000;
 
 function NeedCheckStateEmulation(): Boolean; // ComCtrls 6+ under Vista+
 {$IFNDEF COMPILER7_UP}
@@ -729,6 +778,30 @@ begin
     ChangeRange(Index);
 end;
 
+{$IFOPT R+}
+procedure TJvIPAddressRange.CheckIndex(const I: TJvIPAddressComponentIndex);
+begin
+  if (I > High(TJvIPAddressComponentIndex)) or (I < Low(TJvIPAddressComponentIndex)) then
+    raise ERangeError.Create(Self.ClassName + ' range error: ' + IntToStr(I));
+end;
+{$ENDIF}
+
+function TJvIPAddressRange.GetCheckedMaxRange(I: TJvIPAddressComponentIndex): Byte;
+begin
+  {$IFOPT R+}
+  CheckIndex(I);
+  {$ENDIF}
+  Result := GetMaxRange(I - 1);
+end;
+
+function TJvIPAddressRange.GetCheckedMinRange(I: TJvIPAddressComponentIndex): Byte;
+begin
+  {$IFOPT R+}
+  CheckIndex(I);
+  {$ENDIF}
+  Result := GetMinRange(I - 1);
+end;
+
 function TJvIPAddressRange.GetMaxRange(Index: Integer): Byte;
 begin
   Result := FRange[Index].Max;
@@ -739,15 +812,45 @@ begin
   Result := FRange[Index].Min;
 end;
 
-procedure TJvIPAddressRange.SetMaxRange(const Index: Integer; const Value: Byte);
+procedure TJvIPAddressRange.SetCheckedMaxRange(I: TJvIPAddressComponentIndex;
+  const Value: Byte);
 begin
-  FRange[Index].Max := Value;
+  {$IFOPT R+}
+  CheckIndex(I);
+  {$ENDIF}
+  SetMaxRange(I - 1, Value);
+end;
+
+procedure TJvIPAddressRange.SetCheckedMinRange(I: TJvIPAddressComponentIndex;
+  const Value: Byte);
+begin
+  {$IFOPT R+}
+  CheckIndex(I);
+  {$ENDIF}
+  SetMinRange(I - 1, Value);
+end;
+
+procedure TJvIPAddressRange.SetMaxRange(const Index: Integer; const Value: Byte);
+var
+  Range: TJvIPAddressMinMax;
+begin
+  Range := FRange[Index];
+  Range.Max := Value;
+  if Range.Min > Value then
+    Range.Min := Value;
+
   Change(Index);
 end;
 
 procedure TJvIPAddressRange.SetMinRange(const Index: Integer; const Value: Byte);
+var
+  Range: TJvIPAddressMinMax;
 begin
-  FRange[Index].Min := Value;
+  Range := FRange[Index];
+  Range.Min := Value;
+  if Range.Max < Value then
+    Range.Max := Value;
+
   Change(Index);
 end;
 
@@ -797,15 +900,12 @@ begin
   if Value <> FHandle then
   begin
     if FHandle <> 0 then
-      SetWindowLong(FHandle, GWL_WNDPROC, Integer(FOrgWndProc));
+      SetWindowLongPtr(FHandle, GWL_WNDPROC, LONG_PTR(FOrgWndProc));
 
     FHandle := Value;
 
     if FHandle <> 0 then
-    begin
-      FOrgWndProc := Pointer(GetWindowLong(FHandle, GWL_WNDPROC));
-      SetWindowLong(FHandle, GWL_WNDPROC, Integer(FInstance));
-    end;
+      FOrgWndProc := Pointer(SetWindowLongPtr(FHandle, GWL_WNDPROC, LONG_PTR(FInstance)));
   end;
 end;
 
@@ -879,7 +979,7 @@ begin
   FDataConnector := TJvIPAddressDataConnector.Create(Self);
 
   FRange := TJvIPAddressRange.Create(Self);
-  FAddressValues := TJvIPAddressValues.Create;
+  FAddressValues := TJvIPAddressValues.Create(Self);
   FAddressValues.OnChange := DoAddressChange;
   FAddressValues.OnChanging := DoAddressChanging;
   FTabThroughFields := True;
@@ -892,6 +992,37 @@ begin
 
   for I := 0 to High(FEditControls) do
     FEditControls[I] := TJvIPEditControlHelper.Create(Self);
+
+  FAddress.Address := JvIP4_127_0_0_1;
+end;
+
+type
+  TReaderCracker = class (TReader)
+     public property PropName;
+  end;
+
+procedure TJvIPAddress.DFMSkipLegacyAddressValues(Reader: TReader);
+begin
+  Reader.SkipValue;
+end;
+
+procedure TJvIPAddress.DefineProperties(Filer: TFiler);
+begin
+  inherited;
+  if Filer is TReader then
+  begin
+    { We do not care about writing, but should not break upon legacy triply redundant DFMs
+      If in some future Delphi, TReader cracking became impossible, properties will have to be skipped one by one
+        Legacy DFM extract sample (all those just duplicate direct .Address property):
+            AddressValues.Address = 16980708
+            AddressValues.Value1 = 1
+            AddressValues.Value2 = 3
+            AddressValues.Value3 = 26
+            AddressValues.Value4 = 228
+    }
+    if Pos('AddressValues.', TReaderCracker(Filer).PropName) = 1 then
+      Filer.DefineProperty(TReaderCracker(Filer).PropName, DFMSkipLegacyAddressValues, nil,false);
+  end;
 end;
 
 destructor TJvIPAddress.Destroy;
@@ -933,10 +1064,8 @@ begin
     if FSaveBlank then
       ClearAddress
     else
-    begin
-      Perform(IPM_SETADDRESS, 0, FAddress);
-      FAddressValues.Address := FAddress;
-    end;
+      PushAddressToWindows;
+      
     if (FEditControlCount = 0) and (csDesigning in ComponentState) then
     begin
       // WM_PARENTNOTIFY messages are captured by the IDE starting when
@@ -967,12 +1096,6 @@ begin
     OSCheck(DeleteObject(FLocalFont));
     FLocalFont := 0;
   end;
-end;
-
-procedure TJvIPAddress.DestroyWnd;
-begin
-  FSaveBlank := IsBlank;
-  inherited DestroyWnd;
 end;
 
 // Type used to get access to FindNextControl outside Forms.pas
@@ -1106,13 +1229,6 @@ begin
     end;}
 end;
 
-procedure TJvIPAddress.ClearAddress;
-begin
-  if HandleAllocated then
-    Perform(IPM_CLEARADDRESS, 0, 0);
-  FAddressValues.Address := 0;
-end;
-
 procedure TJvIPAddress.ClearEditControls;
 var
   I: Integer;
@@ -1121,6 +1237,22 @@ begin
     if FEditControls[I] <> nil then
       FEditControls[I].Handle := 0;
   FEditControlCount := 0;
+end;
+
+procedure TJvIPAddress.CMEnabledChanged(var Message: TMessage);
+begin
+  inherited;
+
+  if not Enabled then
+  begin
+    Color := clBtnFace;
+    Font.Color := clBtnShadow;
+  end
+  else
+  begin
+    Color := clWindow;
+    Font.Color := clWindowText;
+  end;
 end;
 
 procedure TJvIPAddress.ColorChanged;
@@ -1146,22 +1278,28 @@ begin
       EnableWindow(FEditControls[I].Handle, Enabled and not (csDesigning in ComponentState));
 end;
 
+procedure TJvIPAddress.PushAddressToWindows;
+begin // expected to be single point for this for possible platform updates/ports
+  if HandleAllocated then
+    Perform(IPM_SETADDRESS, 0, FAddress.Address);
+end;
+
 procedure TJvIPAddress.CNCommand(var Msg: TWMCommand);
 begin
   with Msg do
     case NotifyCode of
       EN_CHANGE:
+        if not FChanging then
         begin
-          Perform(IPM_GETADDRESS, 0, LPARAM(@FAddress));
-          if not FChanging then
-            DoChange;
+          Perform(IPM_GETADDRESS, 0, LPARAM(@FAddress.Address));
+          DoChange;
         end;
       EN_KILLFOCUS:
         begin
           FChanging := True;
           try
-            if not IsBlank then
-              Perform(IPM_SETADDRESS, 0, LPARAM(FAddress));
+            if IsNotBlank then
+              PushAddressToWindows;
           finally
             FChanging := False;
           end;
@@ -1227,11 +1365,40 @@ begin
     FOnFieldChange(Self, FieldIndex, FRange.FRange[FieldIndex], FieldValue);
 end;
 
+procedure TJvIPAddress.DoNotSetRange(const Value: TJvIPAddressRange);
+begin // do nothing, or maybe exception
+end;
+
+function TJvIPAddress.IsNotBlank: Boolean;  // for DFM storage
+begin
+   Result := not IsBlank;
+end;
+
 function TJvIPAddress.IsBlank: Boolean;
 begin
-  Result := False;
   if HandleAllocated then
-    Result := SendMessage(Handle, IPM_ISBLANK, 0, 0) <> 0;
+    Result := SendMessage(Handle, IPM_ISBLANK, 0, 0) <> 0
+  else
+    Result := FSaveBlank;
+end;
+
+procedure TJvIPAddress.ClearAddress;
+begin
+  if HandleAllocated then
+    Perform(IPM_CLEARADDRESS, 0, 0);
+  FSaveBlank := True;
+end;
+
+procedure TJvIPAddress.SetBlank(const Value: boolean);
+begin
+  if Value <> IsBlank then
+  begin
+    FSaveBlank := Value;
+    if Value then
+      ClearAddress
+    else
+      PushAddressToWindows;
+  end;
 end;
 
 function TJvIPAddress.CreateDataConnector: TJvIPAddressDataConnector;
@@ -1263,12 +1430,13 @@ end;
 
 procedure TJvIPAddress.SetAddress(const Value: LongWord);
 begin
-  if FAddress <> Value then
+  if AddressIsBlank or (FAddress.Address <> Value) then
   begin
-    FAddress := Value;
-    if HandleAllocated then
-      Perform(IPM_SETADDRESS, 0, FAddress);
-    FAddressValues.Address := Value;
+    FAddress.Address := Value;
+    FSaveBlank := False;
+    PushAddressToWindows;
+    // on Windows re-querying result is not needed,
+    // GDI will automatically send EN_Change notification after applying range
   end;
 end;
 
@@ -1279,13 +1447,11 @@ end;
 
 procedure TJvIPAddress.UpdateValuesFromString(S: string);
 begin
-  with AddressValues do
-  begin
-    Value1 := StrToIntDef(StrToken(S, '.'), 0);
-    Value2 := StrToIntDef(StrToken(S, '.'), 0);
-    Value3 := StrToIntDef(StrToken(S, '.'), 0);
-    Value4 := StrToIntDef(S, 0);
-  end;
+  S := Trim(s);
+  AddressValue[1] := StrToIntDef(StrToken(S, '.'), 0);
+  AddressValue[2] := StrToIntDef(StrToken(S, '.'), 0);
+  AddressValue[3] := StrToIntDef(StrToken(S, '.'), 0);
+  AddressValue[4] := StrToIntDef(S, 0);
 end;
 
 { Added 03/05/2004 by Kai Gossens }
@@ -1314,6 +1480,34 @@ begin
   DestroyLocalFont;
   inherited;
 end;
+
+function TJvIPAddress.GetAddressValue(Component: TJvIPAddressComponentIndex): Byte;
+begin
+  Result := FAddress.Comps[5-Component];
+end;
+
+procedure TJvIPAddress.SetAddressValue(Component: TJvIPAddressComponentIndex;
+  const Value: Byte);
+var
+  AllowChange: Boolean;
+  Index: Integer;
+begin
+  if AddressValue[Component] <> Value then
+  begin
+    Component := 5 - Component; // reversing to intel byte order
+    Index := Component - 1;
+    AllowChange := (Component >= Low(Component)) and (Component <= High(Component)) and
+                   (Value >= FRange.FRange[Index].Min) and (Value <= FRange.FRange[Index].Max);
+
+    if AllowChange then
+    begin
+      FAddress.Comps[Component] := Value;
+      PushAddressToWindows;
+      FSaveBlank := False;
+    end;
+  end;
+end;
+
 
 function TJvIPAddress.GetControlExtents: TRect;
 var
@@ -1348,8 +1542,7 @@ begin
   UpdateValuesFromString(Msg.Text);
 
   // really long values for the text crashes the program (try: 127.0.0.8787787878787878), so we limit it here before it is set
-  with AddressValues do
-    Msg.Text := PChar(Format('%d.%d.%d.%d', [Value1, Value2, Value3, Value4]));
+  Msg.Text := PChar(Format('%d.%d.%d.%d', [AddressValue[1], AddressValue[2], AddressValue[3], AddressValue[4]]));
 
   inherited;
 end;
@@ -1363,8 +1556,7 @@ begin
   // API, we simply use it to update the values of the AddressValues property
   // If we did not do this, then those values would not get updated as reported
   // in Mantis 2986.
-  if Assigned(AddressValues) then // prevent designtime AV in BDS 2006
-    UpdateValuesFromString(Msg.Text);
+  UpdateValuesFromString(Msg.Text);
 end;
 
 procedure TJvIPAddress.WMParentNotify(var Msg: TWMParentNotify);
@@ -1385,7 +1577,7 @@ begin
       // to select it (the first edit is always selected). I don't know if removing
       // it has any side-effects but I haven't noticed anything
 //      WM_LBUTTONDOWN, WM_MBUTTONDOWN, WM_RBUTTONDOWN:
-//        Perform(Event, Value, Integer(SmallPoint(XPos, YPos)));
+//        Perform(Event, Value, LPARAM(SmallPoint(XPos, YPos)));
     end;
   inherited;
 end;
@@ -2378,14 +2570,21 @@ function TJvTreeNode.GetChecked: Boolean;
 var
   Item: TTVItem;
 begin
-  with Item do
+  if Owner.Owner is TJvTreeView then
   begin
-    mask := TVIF_STATE;
-    hItem := ItemId;
-    if TreeView_GetItem(Handle, Item) then
-      Result := ((Item.State and TVIS_CHECKED) = TVIS_CHECKED)
-    else
-      Result := False;
+    Result := TJvTreeView(Owner.Owner).GetCheckedFromState(Self);
+  end
+  else
+  begin
+    with Item do
+    begin
+      mask := TVIF_STATE;
+      hItem := ItemId;
+      if TreeView_GetItem(Handle, Item) then
+        Result := ((Item.State and TVIS_CHECKED) = TVIS_CHECKED)
+      else
+        Result := False;
+    end;
   end;
 end;
 
@@ -2418,17 +2617,24 @@ begin
   if Value <> GetChecked then
   begin
     FChecked := Value;
-    FillChar(Item, SizeOf(Item), 0);
-    with Item do
+    if Owner.Owner is TJvTreeView then
     begin
-      hItem := ItemId;
-      mask := TVIF_STATE;
-      StateMask := TVIS_STATEIMAGEMASK;
-      if Value then
-        Item.State := TVIS_CHECKED
-      else
-        Item.State := TVIS_CHECKED shr 1;
-      TreeView_SetItem(Handle, Item);
+      TJvTreeView(Owner.Owner).SetCheckedInState(Self, FChecked);
+    end
+    else
+    begin
+      FillChar(Item, SizeOf(Item), 0);
+      with Item do
+      begin
+        hItem := ItemId;
+        mask := TVIF_STATE;
+        StateMask := TVIS_STATEIMAGEMASK;
+        if Value then
+          Item.State := TVIS_CHECKED
+        else
+          Item.State := TVIS_CHECKED shr 1;
+        TreeView_SetItem(Handle, Item);
+      end;
     end;
     DoCheckedChange;
   end;
@@ -2480,6 +2686,7 @@ begin
   inherited Create(AOwner);
   FCheckBoxes := False;
   MultiSelectStyle := JvDefaultTreeViewMultiSelectStyle;
+  FForceClickSelect := True; // to keep the backward compatibility as default
 
   // Since IsCustomDrawn method is not virtual we have to assign ancestor's
   // OnCustomDrawItem event to enable custom drawing
@@ -2586,6 +2793,13 @@ begin
     FOnSelectionChange(Self);
 end;
 
+function TJvTreeView.DoSelectionChanging(OldNode, NewNode: TJvTreeNode; Cause: TJvNodeSelectCause): Boolean;
+begin
+  Result := True;
+  if Assigned(FOnSelectionChanging) then
+    FOnSelectionChanging(Self, OldNode, NewNode, Cause, Result);
+end;
+
 procedure TJvTreeView.DragOver(Source: TObject; X, Y: Integer;
   State: TDragState; var Accept: Boolean);
 begin
@@ -2616,6 +2830,21 @@ end;
 function TJvTreeView.GetChecked(Node: TTreeNode): Boolean;
 begin
   Result := TJvTreeNode(Node).Checked;
+end;
+
+function TJvTreeView.GetCheckedFromState(Node: TTreeNode): Boolean;
+var
+  Item: TTVItem;
+begin
+  with Item do
+  begin
+    mask := TVIF_STATE;
+    hItem := Node.ItemId;
+    if TreeView_GetItem(Handle, Item) then
+      Result := ((Item.State and TVIS_CHECKED) = TVIS_CHECKED)
+    else
+      Result := False;
+  end;
 end;
 
 function TJvTreeView.GetNodePopup(Node: TTreeNode): TPopupMenu;
@@ -2781,6 +3010,24 @@ begin
   TJvTreeNode(Node).Checked := Value;
 end;
 
+procedure TJvTreeView.SetCheckedInState(Node: TTreeNode; Value: Boolean);
+var
+  Item: TTVItem;
+begin
+  FillChar(Item, SizeOf(Item), 0);
+  with Item do
+  begin
+    hItem := Node.ItemId;
+    mask := TVIF_STATE;
+    StateMask := TVIS_STATEIMAGEMASK;
+    if Value then
+      Item.State := TVIS_CHECKED
+    else
+      Item.State := TVIS_CHECKED shr 1;
+    TreeView_SetItem(Handle, Item);
+  end;
+end;
+
 procedure TJvTreeView.SetNodePopup(Node: TTreeNode; Value: TPopupMenu);
 begin
   TJvTreeNode(Node).PopupMenu := Value;
@@ -2857,7 +3104,7 @@ begin
       NM_CLICK, NM_RCLICK:
         begin
           Node := GetNodeAt(Point.X, Point.Y);
-          if Assigned(Node) and not MultiSelect then
+          if Assigned(Node) and ForceClickSelect and not MultiSelect then
             Selected := Node;
 
           if (Node <> nil) and (Msg.NMHdr.code = NM_RCLICK) then
@@ -2888,6 +3135,10 @@ begin
               end;
             end;
         end;
+      TVN_SELCHANGINGA, TVN_SELCHANGINGW:
+        Msg.Result := Ord(not DoSelectionChanging(Items.GetNode(PNMTreeView(Msg.NMHdr).itemOld.hItem) as TJvTreeNode,
+                                                  Items.GetNode(PNMTreeView(Msg.NMHdr).itemNew.hItem) as TJvTreeNode,
+                                                  TJvNodeSelectCause(PNMTreeView(Msg.NMHdr).action)));
     end;
   end;
 end;
@@ -3278,7 +3529,8 @@ begin
   end;
 end;
 
-//=== { TJvIPAddressValues } =================================================
+
+{ TJvIPAddressValues }
 
 procedure TJvIPAddressValues.Change;
 begin
@@ -3293,56 +3545,37 @@ begin
     FOnChanging(Self, Index, Value, Result);
 end;
 
-function TJvIPAddressValues.GetValue: Cardinal;
+constructor TJvIPAddressValues.Create(AOwner: TJvIpAddress);
 begin
-  Result := MAKEIPADDRESS(FValues[0], FValues[1], FValues[2], FValues[3]);
+  inherited Create;
+
+  FOwner := AOwner; 
+end;
+
+function TJvIPAddressValues.GetAddress: Cardinal;
+begin
+  Result := FOwner.Address;
 end;
 
 function TJvIPAddressValues.GetValues(Index: Integer): Byte;
 begin
-  Result := FValues[Index];
+  Result :=  FOwner.AddressValue[Index + 1];
 end;
 
-procedure TJvIPAddressValues.SetValue(const AValue: Cardinal);
-var
-  FChange: Boolean;
+procedure TJvIPAddressValues.SetAddress(const AValue: Cardinal);
 begin
-  FChange := False;
-  if GetValue <> AValue then
-  begin
-    if Changing(0, FIRST_IPADDRESS(AValue)) then
-    begin
-      FValues[0] := FIRST_IPADDRESS(AValue);
-      FChange := True;
-    end;
-    if Changing(1, SECOND_IPADDRESS(AValue)) then
-    begin
-      FValues[1] := SECOND_IPADDRESS(AValue);
-      FChange := True;
-    end;
-    if Changing(2, THIRD_IPADDRESS(AValue)) then
-    begin
-      FValues[2] := THIRD_IPADDRESS(AValue);
-      FChange := True;
-    end;
-    if Changing(3, FOURTH_IPADDRESS(AValue)) then
-    begin
-      FValues[3] := FOURTH_IPADDRESS(AValue);
-      FChange := True;
-    end;
-    if FChange then
-      Change;
-  end;
+  FOwner.Address := AValue;
 end;
 
 procedure TJvIPAddressValues.SetValues(Index: Integer; Value: Byte);
 begin
-  if (Index >= Low(FValues)) and (Index <= High(FValues)) and (FValues[Index] <> Value) then
+  if Changing(Index, Value) then
   begin
-    FValues[Index] := Value;
+    FOwner.AddressValue[Index + 1] := Value;
     Change;
   end;
 end;
+
 
 {$IFDEF UNITVERSIONING}
 initialization
@@ -3351,5 +3584,4 @@ initialization
 finalization
   UnregisterUnitVersion(HInstance);
 {$ENDIF UNITVERSIONING}
-
 end.

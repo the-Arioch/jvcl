@@ -38,7 +38,7 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Messages, Classes, SysUtils,
   JvComponentBase,
-  DBT, SetupApi, Hid, JvTypes;
+  DBT, JvSetupApi, Hid, JvTypes;
 
 const
   // a version string for the component
@@ -507,39 +507,43 @@ var
 begin
   NameThread(ThreadName);
   SleepRet := WAIT_IO_COMPLETION;
-  while not Terminated do
-  begin
-    // read data
-    SleepRet := WAIT_IO_COMPLETION;
-    FillChar(Report[0], Device.Caps.InputReportByteLength, #0);
-    if Device.ReadFileEx(Report[0], Device.Caps.InputReportByteLength, @DummyReadCompletion) then
+  try
+    while not Terminated do
     begin
-      // wait for read to complete
-      repeat
-        SleepRet := SleepEx(Device.ThreadSleepTime, True);
-      until Terminated or (SleepRet = WAIT_IO_COMPLETION);
-      // show data read
-      if not Terminated then
+      // read data
+      SleepRet := WAIT_IO_COMPLETION;
+      FillChar(Report[0], Device.Caps.InputReportByteLength, #0);
+      if Device.ReadFileEx(Report[0], Device.Caps.InputReportByteLength, @DummyReadCompletion) then
       begin
-        NumBytesRead := Device.HidOverlappedReadResult;
-        if NumBytesRead > 0 then
-          // synchronizing only works if the component is not instanciated in a DLL
-          if IsLibrary then
-            DoData
-          else
-            Synchronize(DoData);
+        // wait for read to complete
+        repeat
+          SleepRet := SleepEx(Device.ThreadSleepTime, True);
+        until Terminated or (SleepRet = WAIT_IO_COMPLETION);
+        // show data read
+        if not Terminated then
+        begin
+          NumBytesRead := Device.HidOverlappedReadResult;
+          if NumBytesRead > 0 then
+            // synchronizing only works if the component is not instanciated in a DLL
+            if IsLibrary then
+              DoData
+            else
+              Synchronize(DoData);
+        end;
+      end
+      else
+      begin
+        FErr := GetLastError;
+        Synchronize(DoDataError);
+        SleepEx(Device.ThreadSleepTime, True);  // avoid 100% CPU usage (Mantis 5749)
       end;
-    end
-    else
-    begin
-      FErr := GetLastError;
-      Synchronize(DoDataError);
     end;
+  finally
+    // cancel ReadFileEx call or the callback will
+    // crash your program
+    if SleepRet <> WAIT_IO_COMPLETION then
+      Device.CancelIO(omhRead);
   end;
-  // cancel ReadFileEx call or the callback will
-  // crash your program
-  if SleepRet <> WAIT_IO_COMPLETION then
-    Device.CancelIO(omhRead);
 end;
 
 //=== { TJvHidPnPInfo } ======================================================
@@ -1695,18 +1699,21 @@ var
         if (BytesReturned <> 0) and (GetLastError = ERROR_INSUFFICIENT_BUFFER) then
         begin
           FunctionClassDeviceData := AllocMem(BytesReturned);
-          FunctionClassDeviceData^.cbSize := SizeOf(TSPDeviceInterfaceDetailData);
-          if SetupDiGetDeviceInterfaceDetail(PnPHandle, @DeviceInterfaceData,
-            FunctionClassDeviceData, BytesReturned, BytesReturned, @DevData) then
-          begin
-            // fill in PnPInfo of device
-            PnPInfo := TJvHidPnPInfo.Create(PnPHandle, DevData, PChar(@FunctionClassDeviceData.DevicePath));
-            // create HID device object and add it to the device list
-            HidDev := TJvHidDevice.CtlCreate(PnPInfo, Self);
-            NewList.Add(HidDev);
-            Inc(Devn);
+          try
+            FunctionClassDeviceData^.cbSize := SizeOf(TSPDeviceInterfaceDetailData);
+            if SetupDiGetDeviceInterfaceDetail(PnPHandle, @DeviceInterfaceData,
+              FunctionClassDeviceData, BytesReturned, BytesReturned, @DevData) then
+            begin
+              // fill in PnPInfo of device
+              PnPInfo := TJvHidPnPInfo.Create(PnPHandle, DevData, PChar(@FunctionClassDeviceData.DevicePath));
+              // create HID device object and add it to the device list
+              HidDev := TJvHidDevice.CtlCreate(PnPInfo, Self);
+              NewList.Add(HidDev);
+              Inc(Devn);
+            end;
+          finally
+            FreeMem(FunctionClassDeviceData);
           end;
-          FreeMem(FunctionClassDeviceData);
         end;
       end;
     until not Success;

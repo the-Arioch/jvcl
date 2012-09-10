@@ -170,7 +170,7 @@ uses
   {$ENDIF UNITVERSIONING}
   SysUtils, Classes, Contnrs, TypInfo, IniFiles,
   Windows, Messages, Graphics, Controls, StdCtrls, ExtCtrls,
-  JvExControls, JvExExtCtrls, JvAutoComplete, JvJVCLUtils,
+  JvExControls, JvAutoComplete, JvJVCLUtils,
   JvComponentBase, JvComponent, JvTypes, JvConsts;
 
 const
@@ -568,6 +568,7 @@ type
     property Font;
     property ItemHeight;
     property Painter;
+    property PopupMenu;
     property ReadOnly default False;
     property UseBands default False;
     property WantTabs default False;
@@ -584,6 +585,7 @@ type
     property OnItemValueError;
     property OnItemDoubleClicked;
     property OnItemEdit; // User clicks Ellipsis button.
+    property OnContextPopup;
     property BeforeEdit; // Low level hook for customizing TEdit/TMemo after objects are created, just before editing.
 
     // Standard control events
@@ -1621,6 +1623,7 @@ type
     function GetAsMethod: TMethod; override;
     function GetAsOrdinal: Int64; override;
     function GetAsString: string; override;
+    function GetAsVariant: Variant; override;
     function GetInstance: TObject; virtual;
     function GetProp: PPropInfo; virtual;
     function IsEqualReference(const Ref: TJvCustomInspectorData): Boolean; override;
@@ -1630,6 +1633,7 @@ type
     procedure SetAsMethod(const Value: TMethod); override;
     procedure SetAsOrdinal(const Value: Int64); override;
     procedure SetAsString(const Value: string); override;
+    procedure SetAsVariant(const Value: Variant); override;
     procedure SetInstance(const Value: TObject); virtual;
     procedure SetProp(Value: PPropInfo); virtual;
     function SupportsMethodPointers: Boolean; override;
@@ -1965,6 +1969,9 @@ type
     FSingleProp: Single;
     FSmallintProp: Smallint;
     FTDateTimeProp: TDateTime;
+    {$IFDEF UNICODE}
+    FUnicodeString: UnicodeString;
+    {$ENDIF}
     FWideCharProp: WideChar;
     FWordProp: Word;
     FWordBoolProp: WordBool;
@@ -1988,6 +1995,9 @@ type
     property SingleProp: Single read FSingleProp;
     property SmallintProp: Smallint read FSmallintProp;
     property TDateTimeProp: TDateTime read FTDateTimeProp;
+    {$IFDEF UNICODE}
+    property UnicodeStringProp: UnicodeString read FUnicodeString;
+    {$ENDIF}
     property WideCharProp: WideChar read FWideCharProp;
     property WordProp: Word read FWordProp;
     property WordBoolProp: WordBool read FWordBoolProp;
@@ -2091,7 +2101,10 @@ const
 implementation
 
 uses
-  RTLConsts, Types, StrUtils, Variants, Consts, Dialogs, Forms, Buttons,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
+  RTLConsts, Types, Variants, Consts, Dialogs, Forms, Buttons,
   JclRTTI, JclLogic, JclStrings,
   JvJCLUtils, JvThemes, JvResources, JclSysUtils;
 
@@ -4079,8 +4092,11 @@ procedure TJvCustomInspector.RefreshValues;
 begin
   if (Selected <> nil) and Selected.Editing then
   begin
-    Selected.DoneEdit(True);
-    Selected.InitEdit;
+    if (Selected.EditCtrl = nil) or (Selected.DisplayValue <> Selected.EditCtrl.Text) then
+    begin
+      Selected.DoneEdit(True);
+      Selected.InitEdit;
+    end;
   end;
   Invalidate;
 end;
@@ -8338,12 +8354,15 @@ end;
 
 function TJvInspectorVariantItem.GetDisplayValue: string;
 begin
-  Result := Data.AsVariant;
+  Result := VarToStr(Data.AsVariant);   // return empty string instead of triggering exception when Data is Null
 end;
 
 procedure TJvInspectorVariantItem.SetDisplayValue(const Value: string);
 begin
-  Data.AsVariant := Value;
+  if Value = '' then
+    Data.AsVariant := Unassigned
+  else
+    Data.AsVariant := Value;
 end;
 
 //=== { TJvInspectorClassItem } ==============================================
@@ -10696,6 +10715,15 @@ begin
     raise EJvInspectorData.CreateResFmt(@RsEJvInspDataNoAccessAs, [cJvInspectorString]);
 end;
 
+function TJvInspectorPropData.GetAsVariant: Variant;
+begin
+  CheckReadAccess;
+  if Prop.PropType^.Kind = tkVariant then
+    Result := GetVariantProp(Instance, Prop)
+  else
+    raise EJvInspectorData.CreateResFmt(@RsEJvInspDataNoAccessAs, [cJvInspectorVariant]);
+end;
+
 function TJvInspectorPropData.GetInstance: TObject;
 begin
   Result := FInstance;
@@ -10787,6 +10815,19 @@ begin
     SetStrProp(Instance, Prop, Value)
   else
     raise EJvInspectorData.CreateResFmt(@RsEJvInspDataNoAccessAs, [cJvInspectorString]);
+  InvalidateData;
+  Invalidate;
+end;
+
+procedure TJvInspectorPropData.SetAsVariant(const Value: Variant);
+begin
+  CheckWriteAccess;
+  if IsReadOnlyProperty then
+    Abort;
+  if TypeInfo.Kind = tkVariant then
+    SetVariantProp(Instance, Prop, Value)
+  else
+    raise EJvInspectorData.CreateResFmt(@RsEJvInspDataNoAccessAs, [cJvInspectorVariant]);
   InvalidateData;
   Invalidate;
 end;

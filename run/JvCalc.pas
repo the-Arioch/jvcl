@@ -48,7 +48,7 @@ type
   {$IFDEF RTL230_UP}
   [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
   {$ENDIF RTL230_UP}
-  TJvCalculator = class(TJvCommonDialogF)
+  TJvCalculator = class(TJvCommonDialog)
   private
     FValue: Double;
     FMemory: Double;
@@ -74,7 +74,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    function Execute: Boolean; override;
+    function Execute(ParentWnd: HWND): Boolean; overload; override;
 
     property CalcDisplay: Double read GetDisplay;
     property Memory: Double read FMemory;
@@ -97,6 +97,7 @@ type
     FDisplayPanel: TPanel;
     FDisplayLabel: TLabel;
     FPasteItem: TMenuItem;
+    FParentWnd: HWND;
     procedure FormKeyPress(Sender: TObject; var Key: Char);
     procedure PopupMenuPopup(Sender: TObject);
     procedure CopyItemClick(Sender: TObject);
@@ -107,14 +108,15 @@ type
     procedure CancelClick(Sender: TObject);
     procedure CalcKey(Sender: TObject; var Key: Char);
     procedure DisplayChange(Sender: TObject);
+    procedure CreateParams(var Params: TCreateParams); override;
   public
-    constructor Create(AOwner: TComponent); override;
+    constructor Create(AOwner: TComponent); overload; override;
+    constructor Create(AOwner: TComponent; AParentWnd: HWND); reintroduce; overload;
   end;
 
-function CreateCalculatorForm(AOwner: TComponent; AHelpContext: THelpContext): TJvCalculatorForm;
-function CreatePopupCalculator(AOwner: TComponent ; ABiDiMode: TBiDiMode = bdLeftToRight ): TWinControl;
-procedure SetupPopupCalculator(PopupCalc: TWinControl; APrecision: Byte;
-  ABeepOnError: Boolean);
+function CreateCalculatorForm(AOwner: TComponent; AHelpContext: THelpContext; AOwnerWnd: HWND): TJvCalculatorForm;
+function CreatePopupCalculator(AOwner: TComponent; ABiDiMode: TBiDiMode = bdLeftToRight): TWinControl;
+procedure SetupPopupCalculator(PopupCalc: TWinControl; APrecision: Byte; ABeepOnError: Boolean);
 
 {$IFDEF UNITVERSIONING}
 const
@@ -342,9 +344,9 @@ end;
 
 //=== Global procedures ======================================================
 
-function CreateCalculatorForm(AOwner: TComponent; AHelpContext: THelpContext): TJvCalculatorForm;
+function CreateCalculatorForm(AOwner: TComponent; AHelpContext: THelpContext; AOwnerWnd: HWND): TJvCalculatorForm;
 begin
-  Result := TJvCalculatorForm.Create(AOwner);
+  Result := TJvCalculatorForm.Create(AOwner, AOwnerWnd);
   with Result do
   try
     HelpContext := AHelpContext;
@@ -363,7 +365,7 @@ begin
   end;
 end;
 
-function CreatePopupCalculator(AOwner: TComponent ; ABiDiMode: TBiDiMode = bdLeftToRight ): TWinControl;
+function CreatePopupCalculator(AOwner: TComponent; ABiDiMode: TBiDiMode = bdLeftToRight): TWinControl;
 begin
   Result := TJvPopupCalculator.Create(AOwner);
   // ahuser: reported as a bug (Mantis #2048)
@@ -384,14 +386,13 @@ end;
 procedure SetupPopupCalculator(PopupCalc: TWinControl; APrecision: Byte;
   ABeepOnError: Boolean);
 begin
-  if (PopupCalc = nil) or not (PopupCalc is TJvPopupCalculator) then
-    Exit;
-  if TJvPopupCalculator(PopupCalc).FCalcPanel <> nil then
-    with TJvPopupCalculator(PopupCalc).FCalcPanel do
-    begin
-      FPrecision := Max(2, APrecision);
-      FBeepOnError := ABeepOnError;
-    end;
+  if (PopupCalc <> nil) and (PopupCalc is TJvPopupCalculator) then
+    if TJvPopupCalculator(PopupCalc).FCalcPanel <> nil then
+      with TJvPopupCalculator(PopupCalc).FCalcPanel do
+      begin
+        FPrecision := Max(2, APrecision);
+        FBeepOnError := ABeepOnError;
+      end;
 end;
 
 //=== { TJvCalcButton } ======================================================
@@ -480,12 +481,12 @@ begin
     FOnDisplayChange(Self);
 end;
 
-function TJvCalculator.Execute: Boolean;
+function TJvCalculator.Execute(ParentWnd: HWND): Boolean;
 begin
   if csDesigning in ComponentState then
-    FCalc := CreateCalculatorForm(Application, HelpContext)
+    FCalc := CreateCalculatorForm(Application, HelpContext, ParentWnd)
   else
-    FCalc := CreateCalculatorForm(Self, HelpContext);
+    FCalc := CreateCalculatorForm(Self, HelpContext, ParentWnd);
   with FCalc do
   try
     Ctl3D := not FFlat;
@@ -621,6 +622,19 @@ begin
     OnDisplayChange := Self.DisplayChange;
     FControl := FDisplayLabel;
   end;
+end;
+
+constructor TJvCalculatorForm.Create(AOwner: TComponent; AParentWnd: HWND);
+begin
+  FParentWnd := AParentWnd;
+  Create(AOwner);
+end;
+
+procedure TJvCalculatorForm.CreateParams(var Params: TCreateParams);
+begin
+  inherited CreateParams(Params);
+  if FParentWnd <> 0 then
+    Params.WndParent := FParentWnd;
 end;
 
 procedure TJvCalculatorForm.CalcKey(Sender: TObject; var Key: Char);

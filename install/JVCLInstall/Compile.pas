@@ -125,8 +125,7 @@ type
     procedure DoTargetProgress(Current: TTargetConfig; Position, Max: Integer); virtual;
     procedure DoProjectProgress(const Text: string; Position, Max: Integer); virtual;
     procedure DoResourceProgress(const Text: string; Position, Max: Integer); virtual;
-    procedure DoPackageProgress(Current: TPackageTarget; const Text: string;
-      Position, Max: Integer); virtual;
+    procedure DoPackageProgress(Current: TPackageTarget; const Text: string; Position, Max: Integer); virtual;
 
     procedure DoProgress(const Text: string; Position, Max: Integer;
       Kind: TProgressKind); virtual;
@@ -183,6 +182,7 @@ uses
   {$IFNDEF COMPILER12_UP}
   JvJCLUtils,
   {$ENDIF ~COMPILER12_UP}
+  JclSimpleXML, JclStreams, JclSysUtils,
   CmdLineUtils, JvConsts, Utils, Core, Dcc32FileAgePatch;
 
 resourcestring
@@ -248,19 +248,6 @@ begin
 end;
 
 {----------------------------------------------------------------------}
-
-function CutPersEdition(const Edition: string): string;
-var
-  i: Integer;
-begin
-  Result := Edition;
-  for i := 2 to Length(Result) do
-    if not CharInSet(Result[i], ['0'..'9']) then
-    begin
-      Result := Copy(Result, 1, i - 1);
-      Exit;
-    end;
-end;
 
 function ReplaceTargetMacros(const S: string; TargetConfig: ITargetConfig): string;
 var
@@ -486,6 +473,7 @@ var
   I: Integer;
   OutDirs: TOutputDirs;
   Target: TCompileTarget;
+  BDSLibDir: string;
 begin
   OutDirs := TargetConfig.GetOutputDirs(DebugUnits);
 
@@ -495,14 +483,24 @@ begin
     Lines.Add(DccOpt);
 
     // default paths
+
+    {if TargetConfig.DebugUnits then
+      BDSLibDir := TargetConfig.Target.RootLibDebugDir
+    else}
+      BDSLibDir := TargetConfig.Target.RootLibReleaseDir;
+
+    if not DirectoryExists(BDSLibDir) then
+      raise Exception.CreateFmt('The unit directory "%s" does not exist.'#10'Please contact the JVCL team about this.', [BDSLibDir]);
+
     SearchPaths := TargetConfig.Target.ExpandDirMacros(
-      TargetConfig.Target.RootLibDir + ';' +
-      TargetConfig.Target.RootLibDir + PathDelim + 'obj;' +
+      BDSLibDir + ';' +
+      BDSLibDir + PathDelim + 'obj;' +
       TargetConfig.JclDcpDir + ';' +
       TargetConfig.JclDcuDir + ';' +
       OutDirs.DcpDir + ';' +
       OutDirs.UnitOutDir
     );
+    SearchPaths := RemoveInvalidPaths(SearchPaths);
     Lines.Add('-U"' + SearchPaths + ';' + TargetConfig.JVCLDir + PathDelim + 'Common' + '"');
     Lines.Add('-I"' + SearchPaths + ';' + TargetConfig.JVCLDir + PathDelim + 'Common' + '"');
     Lines.Add('-R"' + SearchPaths + ';' + TargetConfig.JVCLDir + PathDelim + 'Resources' + '"');
@@ -1037,7 +1035,7 @@ begin
 end;
 
 /// <summary>
-/// CompileDelphiPackage() compiles a Delphi.Win32 package. If one of the commands
+/// CompileDelphiPackage() compiles a Delphi package. If one of the commands
 /// could not be executed a message dialog is shown with the complete command
 /// line of the failed command. Returns the ExitCode of the last/failed command.
 /// </summary>
@@ -1271,59 +1269,118 @@ var
   i, Index: Integer;
   Frameworks, Count: Integer;
   TargetConfigs: array of TTargetConfig;
+  InstallAttempted: array of Boolean;
   SysInfo: string;
+  XML: TJclSimpleXML;
+  AConfig: TTargetConfig;
+  AConfigElem: TJclSimpleXMLElem;
+  CompiledConfigIndex: Integer;
+  LogContent: TStringList;
 begin
   Result := True;
   FAborted := False;
+  try
+    SysInfo := GetWindowsProductString;
 
-  SysInfo := GetWindowsProductString;
+    if SysInfo <> '' then
+    begin
+      SysInfo := #1 + SysInfo + Format(' %s (%d.%d.%d)',
+        [Win32CSDVersion, Win32MajorVersion, Win32MinorVersion, Win32BuildNumber]);
 
-  if SysInfo <> '' then
-  begin
-    SysInfo := #1 + SysInfo + Format(' %s (%d.%d.%d)',
-      [Win32CSDVersion, Win32MajorVersion, Win32MinorVersion, Win32BuildNumber]);
-
-    CaptureLine(SysInfo, FAborted);
+      CaptureLine(SysInfo, FAborted);
+      CaptureLine('', FAborted);
+    end;
+    CaptureLine(Format('JVCL %d.%d.%d.%d',
+      [JVCLVersionMajor, JVCLVersionMinor, JVCLVersionRelease, JVCLVersionBuild]),
+      FAborted);
     CaptureLine('', FAborted);
-  end;
-  CaptureLine(Format('JVCL %d.%d.%d.%d',
-    [JVCLVersionMajor, JVCLVersionMinor, JVCLVersionRelease, JVCLVersionBuild]),
-    FAborted);
-  CaptureLine('', FAborted);
 
-  AbortReason := '';
-  // read target configs that should be compiled
-  Count := 0;
-  Frameworks := 0;
-  SetLength(TargetConfigs, Data.Targets.Count);
-  for i := 0 to High(TargetConfigs) do
-  begin
-    if Data.TargetConfig[i].InstallJVCL then
+    AbortReason := '';
+    // read target configs that should be compiled
+    Frameworks := 0;
+    Count := 0;
+    SetLength(TargetConfigs, Data.Targets.Count);
+    for i := 0 to High(TargetConfigs) do
     begin
-      TargetConfigs[Count] := Data.TargetConfig[i];
-      Inc(Count);
-      if pkVCL in Data.TargetConfig[i].InstallMode then
-        Inc(Frameworks);
+      if Data.TargetConfig[i].InstallJVCL then
+      begin
+        TargetConfigs[Count] := Data.TargetConfig[i];
+        Inc(Count);
+        if pkVCL in Data.TargetConfig[i].InstallMode then
+          Inc(Frameworks);
+      end;
     end;
-  end;
-  SetLength(TargetConfigs, Count);
+    SetLength(TargetConfigs, Count);
+    SetLength(InstallAttempted, Count);
 
-  // Delete all units from the JVCL source directory where they shouldn't be
-  ClearSourceDirectory;
+    // Delete all units from the JVCL source directory where they shouldn't be
+    ClearSourceDirectory;
 
-  // compile all selected targets
-  Index := 0;
-  for i := 0 to Count - 1 do
-  begin
-    DoTargetProgress(TargetConfigs[i], Index, Frameworks);
-    if pkVCL in TargetConfigs[i].InstallMode then
+    // Remove previous log files if asked to
+    for I := 0 to Data.Targets.Count - 1 do
+      if CmdOptions.DeletePreviousLogFiles then
+        SysUtils.DeleteFile(Data.TargetConfig[I].LogFileName);
+
+    // compile all selected targets
+    Index := 0;
+    for i := 0 to Count - 1 do
     begin
-      Result := CompileTarget(TargetConfigs[i], pkVCL);
-      if not Result then
-        Break;
-      Inc(Index);
+      InstallAttempted[i] := False;
+      DoTargetProgress(TargetConfigs[i], Index, Frameworks);
+      if pkVCL in TargetConfigs[i].InstallMode then
+      begin
+        if not FAborted then
+          InstallAttempted[i] := True;
+        Result := CompileTarget(TargetConfigs[i], pkVCL);
+        if not Result and not CmdOptions.ContinueOnError then
+          Break;
+        Inc(Index);
+      end;
+      DoTargetProgress(TargetConfigs[i], Index, Frameworks);
     end;
-    DoTargetProgress(TargetConfigs[i], Index, Frameworks);
+  finally
+    if CmdOptions.XMLResultFileName <> '' then
+    begin
+      XML := TJclSimpleXML.Create;
+      try
+        XML.Options := [sxoAutoCreate, sxoAutoIndent, sxoAutoEncodeValue, sxoAutoEncodeEntity];
+        XML.Root.Name := 'JvclInstall';
+        CompiledConfigIndex := 0;
+        for I := 0 to Data.Targets.Count - 1 do
+        begin
+          AConfig := Data.TargetConfig[I];
+          AConfigElem := XML.Root.Items.Add('Installation');
+
+          AConfigElem.Properties.Add('Target', AConfig.MainTargetSymbol);
+
+          if AConfig.Target.IsBDS and (AConfig.Target.IDEVersion >= 9) then
+            AConfigElem.Properties.Add('TargetName', Format('%s %s %s', [AConfig.Target.Name, AConfig.Target.VersionStr, AConfig.Target.PlatformName])) // do not localize
+          else
+            AConfigElem.Properties.Add('TargetName', Format('%s %s', [AConfig.Target.Name, AConfig.Target.VersionStr])); // do not localize
+
+          AConfigElem.Properties.Add('Enabled', pkVCL in AConfig.InstallMode);
+          AConfigElem.Properties.Add('InstallAttempted', InstallAttempted[CompiledConfigIndex]);
+          AConfigElem.Properties.Add('InstallSuccess', AConfig.InstallSuccess);
+          AConfigElem.Properties.Add('LogFileName', Iff(FileExists(AConfig.LogFileName), AConfig.LogFileName, ''));
+          if CmdOptions.IncludeLogFilesInXML and FileExists(AConfig.LogFileName) then
+          begin
+            LogContent := TStringList.Create;
+            try
+              LogContent.LoadFromFile(AConfig.LogFileName{$IFDEF UNICODE}, TEncoding.UTF8{$ENDIF UNICODE});
+              AConfigElem.Items.Add('LogFile').Items.AddCData('', {$IFNDEF UNICODE}UTF8Decode{$ENDIF UNICODE}(LogContent.Text));
+            finally
+              LogContent.Free;
+            end;
+          end;
+
+          if AConfig = TargetConfigs[CompiledConfigIndex] then
+            Inc(CompiledConfigIndex);
+        end;
+        XML.SaveToFile(CmdOptions.XMLResultFileName, JclStreams.seUTF8);
+      finally
+        XML.Free;
+      end;
+    end;
   end;
 end;
 
@@ -1538,29 +1595,43 @@ begin
   Aborted := False;
   FOutput.Clear;
 
-  DeleteRemovedFiles(TargetConfig);
+  try
+    try
+      DeleteRemovedFiles(TargetConfig);
 
-  // VCL
-  if Result and (pkVCL in TargetConfig.InstallMode) then
-  begin
-    if not TargetConfig.DeveloperInstall then
-    begin
-      // debug units
-      if TargetConfig.Target.SupportsPersonalities([persDelphi]) and
-        TargetConfig.DebugUnits then
-        Result := CompileProjectGroup(
-          TargetConfig.Frameworks.Items[TargetConfig.Target.IsPersonal, pkVCL], True);
+      // VCL
+      if Result and (pkVCL in TargetConfig.InstallMode) then
+      begin
+        if not TargetConfig.DeveloperInstall then
+        begin
+          // debug units
+          if TargetConfig.Target.SupportsPersonalities([persDelphi]) and
+            TargetConfig.DebugUnits then
+            Result := CompileProjectGroup(
+              TargetConfig.Frameworks.Items[TargetConfig.Target.IsPersonal, pkVCL], True);
+        end;
+
+        if Result then
+        begin
+          // compile
+          Result := CompileProjectGroup(
+            TargetConfig.Frameworks.Items[TargetConfig.Target.IsPersonal, pkVCL], False);
+        end;
+
+        if Result then
+          CaptureLine('[Finished JVCL for VCL installation]', Aborted); // do not localize
+      end;
+    finally
+      TargetConfig._SetBuildSuccess(Result);
     end;
-
-    if Result then
+  except
+    on E: Exception do
     begin
-      // compile
-      Result := CompileProjectGroup(
-        TargetConfig.Frameworks.Items[TargetConfig.Target.IsPersonal, pkVCL], False);
+      if Assigned(ApplicationHandleException) then
+        ApplicationHandleException(nil);
+      AbortReason := E.Message;
+      Result := False;
     end;
-
-    if Result then
-      CaptureLine('[Finished JVCL for VCL installation]', Aborted); // do not localize
   end;
 end;
 
@@ -1742,7 +1813,7 @@ var
   AProjectIndex, i: Integer;
   TargetConfig: ITargetConfig;
   DccOpt: string;
-  Edition, JVCLPackagesDir: string;
+  JVCLPackagesDir: string;
   Files: TStrings;
 
   ProjectOrder: TList;
@@ -1781,7 +1852,6 @@ begin
         Inc(FPkgCount);
     FPkgIndex := 0;
 
-    Edition := TargetConfig.TargetSymbol;
     JVCLPackagesDir := TargetConfig.JVCLPackagesDir;
 
     DccOpt := '-M'; // make modified units, output 'never build' DCPs
@@ -1813,7 +1883,7 @@ begin
 
 {**}DoProjectProgress(RsGeneratingPackages + DebugProgress, GetProjectIndex, ProjectMaxProgress);
     // generate the packages and .cfg files
-    if not GeneratePackages('JVCL', CutPersEdition(Edition),
+    if not GeneratePackages('JVCL', {CutPersEdition(TargetSymbol)} TargetConfig.MainTargetSymbol,
                             TargetConfig.JVCLPackagesDir) then
       Exit; // AbortReason is set in GeneratePackages
 
@@ -1931,7 +2001,7 @@ begin
       begin
         if TargetConfig.CleanPalettes then
           TargetConfig.CleanJVCLPalette(False);
-        TargetConfig.RegisterToIDE;
+        TargetConfig.RegisterDesigntimePackages;
       end;
     end;
   finally

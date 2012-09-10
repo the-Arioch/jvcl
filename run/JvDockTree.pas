@@ -37,7 +37,7 @@ uses
   {$ENDIF UNITVERSIONING}
   ComCtrls,
   Windows, Messages, Classes, Graphics, Controls, Forms,
-  JvComponentBase, JvDockSupportClass;
+  JvComponentBase;
 
 type
   TJvDockTree = class;
@@ -600,6 +600,7 @@ const
 implementation
 
 uses
+  Types,
   {$IFDEF JVCLThemesEnabled}
   JvThemes,
   {$ENDIF JVCLThemesEnabled}
@@ -1400,7 +1401,7 @@ begin
     LName := AParent.Name;
     Write(Indent + '      <parent>');
     Write(Indent + '        <class>' + LClassName + '</class>');
-    Write(Indent + '        <name>' + LName + '@' + IntToHex(Integer(AParent), 8) + '</name>');
+    Write(Indent + '        <name>' + LName + '@' + IntToHex(LPARAM(AParent), 2 * SizeOf(LPARAM)) + '</name>');
     if AParent is TJvDockPanel then
     begin
       DockServer := TJvDockPanel(AParent).DockServer;
@@ -1604,7 +1605,7 @@ begin
     LName := AParent.Name;
     //Write(Indent + '      <parent>');
     //Write(Indent + '        <class>' + LClassName + '</class>');
-    //Write(Indent + '        <name>' + LName + '@' + IntToHex(Integer(AParent), 8) + '</name>');
+    //Write(Indent + '        <name>' + LName + '@' + IntToHex(LPARAM(AParent), 2 * SizeOf(LPARAM)) + '</name>');
     if AParent is TJvDockPanel then
     begin
       (*DockServer := TJvDockPanel(AParent).DockServer;

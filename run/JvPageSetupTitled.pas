@@ -24,7 +24,6 @@ Known Issues:
 unit JvPageSetupTitled;
 
 {$I jvcl.inc}
-{$I vclonly.inc}
 
 interface
 
@@ -75,7 +74,7 @@ implementation
 {$R JvPageSetupTitled.res}
 
 uses
-  Windows, Forms, SysUtils, CommDlg;
+  Windows, Forms, SysUtils;
 
 const
   // dialog controls

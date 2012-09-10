@@ -33,10 +33,10 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  Windows, ActnList, ImgList, Graphics,
+  Windows, ActnList, Graphics,
   Forms, Controls, Classes, DB,
   {$IFDEF USE_3RDPARTY_DEVEXPRESS_CXGRID}
-  cxGridCustomTableView, cxDBData,
+  cxGridCustomTableView,
   {$ENDIF USE_3RDPARTY_DEVEXPRESS_CXGRID}
   {$IFDEF USE_3RDPARTY_SMEXPORT}
   SMEWIZ, ExportDS, SMEEngine,
@@ -261,7 +261,7 @@ type
     FMinCountSelectedRows: Integer;
     FShowSelectedRows: Boolean;
   protected
-    procedure SetCaption(Value: string);
+    procedure SetCaption(Value: string); {$IFDEF RTL240_UP}reintroduce;{$ENDIF RTL240_UP}
   public
     constructor Create(AOwner: TComponent); override;
     procedure ShowPositionDialog;
@@ -404,7 +404,7 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    procedure SMEWizardDlgGetCellParams(Sender: TObject; Field: TField; var Text: string; AFont: TFont; var Alignment:
+    procedure SMEWizardDlgGetCellParams(Sender: TObject; Field: TField; var Text: TSMEString; AFont: TFont; var Alignment:
         TAlignment; var Background: TColor; var CellType: TCellType);
     procedure SMEWizardDlgOnBeforeExecute(Sender: TObject);
   published
@@ -520,21 +520,17 @@ const
 implementation
 
 uses
-  SysUtils, Grids, TypInfo, StrUtils,
+  SysUtils, StrUtils,
   {$IFDEF USE_3RDPARTY_DEVEXPRESS_CXGRID}
-  cxGrid, cxGridDBDataDefinitions,
+  cxGrid,
   {$ENDIF USE_3RDPARTY_DEVEXPRESS_CXGRID}
   {$IFDEF USE_3RDPARTY_SMEXPORT}
   {$IFDEF USE_3RDPARTY_DEVEXPRESS_CXGRID}
   SMEEngCx,
   {$ENDIF USE_3RDPARTY_DEVEXPRESS_CXGRID}
-  sme2sql, IniFiles,
+  sme2sql,
   {$ENDIF USE_3RDPARTY_SMEXPORT}
-  {$IFDEF USE_3RDPARTY_DEVEXPRESS_CXGRID}
-  cxCustomData,
-  {$ENDIF USE_3RDPARTY_DEVEXPRESS_CXGRID}
-  JvResources, JvParameterList,
-  JvDSADialogs,
+  JvResources, JvParameterList, JvDSADialogs,
   Variants, Dialogs, StdCtrls, Clipbrd, JvJVCLUtils, JclFileUtils;
 
 function TJvDatabaseActionList.GetDataComponent: TComponent;
@@ -1466,8 +1462,8 @@ begin
     FDefaultOptionsDirectory := PathAddSeparator(FDefaultOptionsDirectory);
 end;
 
-procedure TJvDatabaseSMExportOptions.SMEWizardDlgGetCellParams(Sender: TObject; Field: TField; var Text: String; AFont:
-    TFont; var Alignment: TAlignment; var Background: TColor; var CellType: TCellType);
+procedure TJvDatabaseSMExportOptions.SMEWizardDlgGetCellParams(Sender: TObject; Field: TField; var Text: TSMEString;
+    AFont: TFont; var Alignment: TAlignment; var Background: TColor; var CellType: TCellType);
 const
   SToDateFormatLong = 'TO_DATE(''%s'', ''DD.MM.YYYY HH24:MI:SS'')';
   SToDateFormatShort = 'TO_DATE(''%s'', ''DD.MM.YYYY'')';

@@ -36,6 +36,9 @@ procedure Register;
 implementation
 
 uses
+  {$IFDEF HAS_UNIT_SYSTEM_ACTIONS}
+  System.Actions,
+  {$ENDIF HAS_UNIT_SYSTEM_ACTIONS}
   Windows, SysUtils, Classes, Graphics, Controls, Forms, Dialogs, StdCtrls, ExtCtrls,
   ActnList, ImgList,
   ToolsAPI,
@@ -264,7 +267,7 @@ begin
   Supports(BorlandIDEServices,IOTAAboutBoxServices, AboutBoxServices);
   Assert(Assigned(AboutBoxServices), RsENoAboutServices);
   ProductImage := LoadBitmap(FindResourceHInstance(HInstance), 'JVCLSPLASH');
-  AboutBoxIndex := AboutBoxServices.AddPluginInfo(RsAboutTitle, RsAboutDescription,
+  AboutBoxIndex := AboutBoxServices.AddPluginInfo(RsAboutTitle + ' ' + JVCL_VERSIONSTRING, RsAboutDescription,
     ProductImage, False, RsAboutLicenceStatus);
 end;
 
@@ -284,7 +287,7 @@ var
 begin
   Assert(Assigned(SplashScreenServices), RsENoSplashServices);
   ProductImage := LoadBitmap(FindResourceHInstance(HInstance), 'JVCLSPLASH');
-  SplashScreenServices.AddPluginBitmap(RsAboutDialogTitle, ProductImage,
+  SplashScreenServices.AddPluginBitmap(RsAboutDialogTitle + ' ' + JVCL_VERSIONSTRING, ProductImage,
     False, RsAboutLicenceStatus);
 end;
 

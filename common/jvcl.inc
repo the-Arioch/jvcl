@@ -96,13 +96,23 @@ ALERT_jedi_inc_incompatible
 {-----------------------------------------------------------------------------}
 {$IFDEF DELPHI16}
  {$IFDEF CPUX86}
- {$I jvcld16win32.inc}
+ {$I jvcld16.inc}
  {$ENDIF CPUX86}
  {$IFDEF CPUX64}
- {$I jvcld16win64.inc}
+ {$I jvcld16_x64.inc}
  {$ENDIF CPUX64}
  {$DEFINE JVCL_CONFIGURED}
 {$ENDIF DELPHI16}
+{-----------------------------------------------------------------------------}
+{$IFDEF DELPHI17}
+ {$IFDEF CPUX86}
+ {$I jvcld17.inc}
+ {$ENDIF CPUX86}
+ {$IFDEF CPUX64}
+ {$I jvcld17_x64.inc}
+ {$ENDIF CPUX64}
+ {$DEFINE JVCL_CONFIGURED}
+{$ENDIF DELPHI17}
 {-----------------------------------------------------------------------------}
 { C++Builder                                                                  }
 {-----------------------------------------------------------------------------}
@@ -145,6 +155,16 @@ ALERT_jedi_inc_incompatible
  {$ENDIF CPUX64}
  {$DEFINE JVCL_CONFIGURED}
 {$ENDIF BCB16}
+{-----------------------------------------------------------------------------}
+{$IFDEF BCB17}
+ {$IFDEF CPUX86}
+ {$I jvcld17win32.inc} // same include file for BDS based C++
+ {$ENDIF CPUX86}
+ {$IFDEF CPUX64}
+ //there is no 64-bit C++Builder yet
+ {$ENDIF CPUX64}
+ {$DEFINE JVCL_CONFIGURED}
+{$ENDIF BCB17}
 
 {$ENDIF DEFAULT_JVCL_INC}
 {-----------------------------------------------------------------------------}
@@ -183,9 +203,40 @@ ALERT_jedi_inc_incompatible
  {$ENDIF JVCLThemesEnabled}
 {$ENDIF COMPILER7_UP}
 
-// only allowed for VCL
-{$IFNDEF VCL}
- {$UNDEF JvInterpreter_OLEAUTO}
- {$UNDEF JVCLThemesEnabled}
- {$UNDEF JVCLThemesEnabledD6}
-{$ENDIF !VCL}
+{$IFDEF USE_3RDPARTY_DEVEXPRESS_CXEDITOR_SHARED}
+  {$DEFINE USE_3RDPARTY_DEVEXPRESS_CXEDITOR}
+{$ENDIF}
+{$IFDEF USE_3RDPARTY_DEVEXPRESS_CXEDITOR_NON_SHARED}
+  {$DEFINE USE_3RDPARTY_DEVEXPRESS_CXEDITOR}
+{$ENDIF}
+{$IFDEF USE_3RDPARTY_DEVEXPRESS_CXGRID_SHARED}
+  {$DEFINE USE_3RDPARTY_DEVEXPRESS_CXGRID}
+{$ENDIF}
+{$IFDEF USE_3RDPARTY_DEVEXPRESS_CXGRID_NON_SHARED}
+  {$DEFINE USE_3RDPARTY_DEVEXPRESS_CXGRID}
+{$ENDIF}
+{$IFDEF USE_3RDPARTY_DEVEXPRESS_CXVERTICALGRID_SHARED}
+  {$DEFINE USE_3RDPARTY_DEVEXPRESS_CXVERTICALGRID}
+{$ENDIF}
+{$IFDEF USE_3RDPARTY_DEVEXPRESS_CXVERTICALGRID_NON_SHARED}
+  {$DEFINE USE_3RDPARTY_DEVEXPRESS_CXVERTICALGRID}
+{$ENDIF}
+{$IFDEF USE_3RDPARTY_DEVEXPRESS_CXPIVOTGRID_SHARED}
+  {$DEFINE USE_3RDPARTY_DEVEXPRESS_CXPIVOTGRID}
+{$ENDIF}
+{$IFDEF USE_3RDPARTY_DEVEXPRESS_CXPIVOTGRID_NON_SHARED}
+  {$DEFINE USE_3RDPARTY_DEVEXPRESS_CXPIVOTGRID}
+{$ENDIF}
+{$IFDEF USE_3RDPARTY_DEVEXPRESS_CXTREELIST_SHARED}
+  {$DEFINE USE_3RDPARTY_DEVEXPRESS_CXTREELIST}
+{$ENDIF}
+{$IFDEF USE_3RDPARTY_DEVEXPRESS_CXTREELIST_NON_SHARED}
+  {$DEFINE USE_3RDPARTY_DEVEXPRESS_CXTREELIST}
+{$ENDIF}
+
+{$IFDEF USE_3RDPARTY_DEVART_ODAC}
+  {$DEFINE USE_3RDPARTY_DEVART_DAC}
+{$ENDIF}
+{$IFDEF USE_3RDPARTY_DEVART_UNIDAC}
+  {$DEFINE USE_3RDPARTY_DEVART_DAC}
+{$ENDIF}

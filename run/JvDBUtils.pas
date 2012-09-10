@@ -38,7 +38,7 @@ uses
   {$IFDEF MSWINDOWS}
   Windows,
   {$ENDIF MSWINDOWS}
-  Variants, Classes, SysUtils, Contnrs, DB,
+  Variants, Classes, SysUtils, DB,
   JvAppStorage;
 
 type
@@ -152,6 +152,7 @@ function FormatAnsiSQLCondition(const FieldName, Operator, Value: string;
 
 const
   TrueExpr = '0=0';
+  {$NODEFINE TrueExpr}
 
 const
   { Server Date formats}
@@ -194,6 +195,12 @@ implementation
 
 uses
   DBConsts, Math, Controls, Forms, Dialogs,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF}
+  {$IFDEF RTL240_UP}
+  System.Generics.Collections,
+  {$ENDIF RTL240_UP}
   JvJVCLUtils, JvJCLUtils, JvTypes, JvConsts, JvResources;
 
 { TJvDataLink }
@@ -466,7 +473,7 @@ function DataSetLocateThrough(DataSet: TDataSet; const KeyFields: string;
   const KeyValues: Variant; Options: TLocateOptions): Boolean;
 var
   FieldCount: Integer;
-  Fields: TList;
+  Fields: TList{$IFDEF RTL240_UP}<TField>{$ENDIF RTL240_UP};
   Bookmark: {$IFDEF RTL200_UP}TBookmark{$ELSE}TBookmarkStr{$ENDIF RTL200_UP};
 
   function CompareField(Field: TField; const Value: Variant): Boolean;
@@ -512,7 +519,7 @@ begin
   DataSet.CheckBrowseMode;
   if DataSet.IsEmpty then
     Exit;
-  Fields := TList.Create;
+  Fields := TList{$IFDEF RTL240_UP}<TField>{$ENDIF RTL240_UP}.Create;
   try
     DataSet.GetFieldList(Fields, KeyFields);
     FieldCount := Fields.Count;
@@ -943,19 +950,23 @@ begin
     for I := 0 to Source.FieldCount - 1 do
     begin
       F := Dest.FindField(Source.Fields[I].FieldName);
+      FSrc := Source.Fields[i];
       if (F <> nil) and (F.DataType <> ftAutoInc) then
       begin
-        case F.DataType of
-           ftString: F.AsString := Source.Fields[i].AsString;
-           ftInteger: F.AsInteger := Source.Fields[i].AsInteger;
-           ftBoolean: F.AsBoolean := Source.Fields[i].AsBoolean;
-           ftFloat: F.AsFloat := Source.Fields[i].AsFloat;
-           ftCurrency: F.AsCurrency := Source.Fields[i].AsCurrency;
-           ftDate: F.AsDateTime := Source.Fields[i].AsDateTime;
-           ftDateTime: F.AsDateTime := Source.Fields[i].AsDateTime;
+        if FSrc.IsNull then
+          F.Value := FSrc.Value
         else
-           F.Value := Source.Fields[I].Value;
-        end;
+          case F.DataType of
+             ftString: F.AsString := FSrc.AsString;
+             ftInteger: F.AsInteger := FSrc.AsInteger;
+             ftBoolean: F.AsBoolean := FSrc.AsBoolean;
+             ftFloat: F.AsFloat := FSrc.AsFloat;
+             ftCurrency: F.AsCurrency := FSrc.AsCurrency;
+             ftDate: F.AsDateTime := FSrc.AsDateTime;
+             ftDateTime: F.AsDateTime := FSrc.AsDateTime;
+          else
+             F.Value := FSrc.Value;
+          end;
       end;
     end;
   end
@@ -967,17 +978,20 @@ begin
       FSrc := Source.FindField(Source.FieldDefs[I].Name);
       if (F <> nil) and (FSrc <> nil) and (F.DataType <> ftAutoInc) then
       begin
-        case F.DataType of
-           ftString: F.AsString := FSrc.AsString;
-           ftInteger: F.AsInteger := FSrc.AsInteger;
-           ftBoolean: F.AsBoolean := FSrc.AsBoolean;
-           ftFloat: F.AsFloat := FSrc.AsFloat;
-           ftCurrency: F.AsCurrency := FSrc.AsCurrency;
-           ftDate: F.AsDateTime := FSrc.AsDateTime;
-           ftDateTime: F.AsDateTime := FSrc.AsDateTime;
+        if FSrc.IsNull then
+          F.Value := FSrc.Value
         else
-           F.Value := FSrc.Value;
-        end;
+          case F.DataType of
+             ftString: F.AsString := FSrc.AsString;
+             ftInteger: F.AsInteger := FSrc.AsInteger;
+             ftBoolean: F.AsBoolean := FSrc.AsBoolean;
+             ftFloat: F.AsFloat := FSrc.AsFloat;
+             ftCurrency: F.AsCurrency := FSrc.AsCurrency;
+             ftDate: F.AsDateTime := FSrc.AsDateTime;
+             ftDateTime: F.AsDateTime := FSrc.AsDateTime;
+          else
+             F.Value := FSrc.Value;
+          end;
       end;
     end;
   end;

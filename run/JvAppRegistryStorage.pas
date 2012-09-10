@@ -65,8 +65,7 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Classes, Forms,
-  JclBase,
-  JvAppStorage, JvTypes, JvJVCLUtils;
+  JvAppStorage, JvTypes;
 
 type
   TJvAppRegistryStorageOptions = class(TJvAppStorageOptions)
@@ -78,7 +77,7 @@ type
   end;
 
   {$IFDEF RTL230_UP}
-  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32)]
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
   {$ENDIF RTL230_UP}
   TJvAppRegistryStorage = class(TJvCustomAppStorage)
   private
@@ -152,7 +151,7 @@ implementation
 
 uses
   SysUtils, Dialogs,
-  JclRegistry, JclResources, JclStrings, JclFileUtils,
+  JclRegistry, JclResources,
   JvConsts, JvResources;
 
 const
@@ -463,12 +462,27 @@ var
   SubKey: string;
   ValueName: string;
   DataType: Cardinal;
+  {$IFDEF CPUX64}
+  Ext80Value: Extended80;
+  {$ENDIF CPUX64}
 begin
   SplitKeyPath(Path, SubKey, ValueName);
   Result := Default;
   try
     if not RegGetDataType(FRegHKEY, SubKey, ValueName, DataType) or (DataType = REG_BINARY) then
-      RegReadBinary(FRegHKEY, SubKey, ValueName, Result, SizeOf(Result))
+    begin
+      {$IFDEF CPUX64}
+      // Keep backward compatiblity to x86 Extended type
+      RegReadBinary(FRegHKEY, SubKey, ValueName, Ext80Value, SizeOf(Ext80Value));
+      try
+        Result := Ext80Value
+      except
+        Result := Default;
+      end;
+      {$ELSE}
+      RegReadBinary(FRegHKEY, SubKey, ValueName, Result, SizeOf(Result));
+      {$ENDIF CPUX64}
+    end
     else
       raise EJclRegistryError.CreateResFmt(@RsWrongDataType, ['', SubKey, ValueName]);
   except
@@ -484,10 +498,19 @@ procedure TJvAppRegistryStorage.DoWriteFloat(const Path: string; Value: Extended
 var
   SubKey: string;
   ValueName: string;
+  {$IFDEF CPUX64}
+  Ext80Value: Extended80;
+  {$ENDIF CPUX64}
 begin
   SplitKeyPath(Path, SubKey, ValueName);
   CreateKey(SubKey);
+  {$IFDEF CPUX64}
+  // Keep backward compatiblity to x86 Extended type
+  Ext80Value := Value;
+  RegWriteBinary(FRegHKEY, SubKey, ValueName, Ext80Value, SizeOf(Ext80Value));
+  {$ELSE}
   RegWriteBinary(FRegHKEY, SubKey, ValueName, Value, SizeOf(Value));
+  {$ENDIF CPUX64}
 end;
 
 function TJvAppRegistryStorage.DoReadString(const Path: string; const Default: string): string;

@@ -33,8 +33,7 @@ uses
   JclUnitVersioning,
 {$ENDIF UNITVERSIONING}
   JvDynControlEngine,
-  Classes, JvBaseDlg, JvAppStorage, Forms, Controls, JvDynControlEngineIntf,
-  JvPropertyStore, Menus;
+  Windows, Classes, JvBaseDlg, JvAppStorage, Forms, Controls;
 
 type
   TJvBaseDBDialog = class(TJvCommonDialog)
@@ -44,6 +43,7 @@ type
     FDBDialog: TForm;
     FDynControlEngine: TJvDynControlEngine;
     FSession: TComponent;
+    FParentWnd: HWND;
     function GetDynControlEngine: TJvDynControlEngine;
   protected
     function CreateForm: TForm; virtual;
@@ -56,7 +56,7 @@ type
     property AppStorage: TJvCustomAppStorage read FAppStorage write SetAppStorage;
     property AppStoragePath: string read FAppStoragePath write SetAppStoragePath;
   public
-    function Execute: Boolean; override;
+    function Execute(ParentWnd: HWND): Boolean; overload; override;
     function SessionIsConnected: Boolean; virtual;
     property DBDialog: TForm read FDBDialog ;
     property Session: TComponent read FSession write SetSession;
@@ -77,14 +77,17 @@ const
 
 implementation
 
-uses 
-  SysUtils, Types, ExtCtrls, ComCtrls, StdCtrls, 
+uses
+  SysUtils, Types,
+  JvJCLUtils, // SetWindowLongPtr for older Delphi versions
   JvJVCLUtils;
 
 function TJvBaseDBDialog.CreateForm: TForm;
 begin
   Result := TForm(DynControlEngine.CreateForm('', ''));
   CreateFormControls(Result);
+  if FParentWnd <> 0 then
+    SetWindowLongPtr(Result.Handle, GWL_HWNDPARENT, LONG_PTR(FParentWnd));
 end;
 
 procedure TJvBaseDBDialog.CreateFormControls(aForm: TForm);
@@ -95,10 +98,11 @@ procedure TJvBaseDBDialog.AfterCreateFormControls(aForm: TForm);
 begin
 end;
 
-function TJvBaseDBDialog.Execute: Boolean;
+function TJvBaseDBDialog.Execute(ParentWnd: HWND): Boolean;
 begin
   if not Assigned(Session) then
     Abort;
+  FParentWnd := ParentWnd;
   FDBDialog := CreateForm;
   try
     AfterCreateFormControls(FDBDialog);

@@ -40,7 +40,10 @@ uses
   {$ENDIF UNITVERSIONING}
   SysUtils, Classes,
   Windows, Messages, Graphics, Controls, ImgList, ComCtrls,
-  JvComponent, JvThemes, JvPageList, JvExComCtrls;
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
+  JvPageList, JvExComCtrls;
 
 type
   TJvCustomPageListTreeView = class;
@@ -77,8 +80,7 @@ type
     * PageDefault is the default PageIndex to assign to new nodes
     * PageLinks is the property used att design time to set up a Nodes PageIndex. At run-time, use
       TJvPageIndexNode(Node).PageIndex := Value;
-    * PageList is the IPageList implementor that is attached to this control. NOTE: for D5, PageList is
-      instead a TComponent: to get at the IPageList interface, use PageListIntf instead
+    * PageList is the IPageList implementor that is attached to this control
     * CanChange calls IPageList.CanChange method and Change calls IPageList.SetActivePageIndex
     * IPageList.getPageCaption is only used by the design-time editor for the PageLinks property
     }
@@ -396,8 +398,7 @@ const
 implementation
 
 uses
-  JvResources,
-  Forms, JvJVCLUtils;
+  Forms;
 
 procedure ResetSiblingFolders(Node: TTreeNode; ImageIndex, SelectedIndex: Integer; Recurse: Boolean = False);
 var

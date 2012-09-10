@@ -34,8 +34,8 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   SysUtils, Classes,
-  Windows, Messages, Graphics, Controls, Forms, StdCtrls, ExtCtrls,
-  JvConsts, JvComponent;
+  Windows, Messages, Graphics, Controls, Forms,
+  JvComponent;
 
 const
   MinDragBarHeight = 7;
@@ -124,9 +124,6 @@ const
 {$ENDIF UNITVERSIONING}
 
 implementation
-
-uses
-  JvResources;
 
 //=== { TJvOfficeDragBarForm } =================================================
 

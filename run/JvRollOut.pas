@@ -56,6 +56,9 @@ uses
   {$ENDIF UNITVERSIONING}
   SysUtils, Classes,
   Windows, Forms, Messages, Controls, Graphics, ImgList, ExtCtrls, ActnList,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvExtComponent, JvThemes;
 
 const
@@ -326,6 +329,7 @@ const
 implementation
 
 uses
+  Types,
   JvJVCLUtils; // for IsAccel()
 
 
@@ -1179,7 +1183,7 @@ begin
   begin
     Msg.Msg := CM_EXPANDED;
     Msg.WParam := FGroupIndex;
-    Msg.LParam := Longint(Self);
+    Msg.LParam := LPARAM(Self);
     Msg.Result := 0;
     Parent.Broadcast(Msg);
   end;

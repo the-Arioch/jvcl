@@ -288,8 +288,8 @@ const
 implementation
 
 uses
-  Consts, RTLConsts, SysUtils, Math, Graphics, Clipbrd,
-  JvUnicodeCanvas, JvJCLUtils, JvThemes, JvConsts, JvResources;
+  SysUtils, Math, Graphics, Clipbrd,
+  JvUnicodeCanvas, JvJCLUtils, JvConsts, JvResources;
 
 type
   TJvInsertUndo = class(TJvCaretUndo)
@@ -616,7 +616,14 @@ begin
   if Len < X then
   begin
     SetLength(BegLine, X - 1);
-    FillChar(BegLine[Len + 1], X - Len - 1, ' ');
+    P := PWideChar(BegLine) + Len;
+    Len := X - Len - 1;
+    while Len > 0 do
+    begin
+      P^ := ' ';
+      Inc(P);
+      Dec(Len);
+    end;
   end;
 
   JvEditor.LockUpdate;

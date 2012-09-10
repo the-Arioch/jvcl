@@ -27,7 +27,6 @@ Known Issues:
 unit JvMenus;
 
 {$I jvcl.inc}
-{$I vclonly.inc}
 
 interface
 
@@ -37,8 +36,7 @@ uses
   {$ENDIF UNITVERSIONING}
   Windows, Messages, SysUtils, Contnrs, Graphics, Controls, Forms, Classes,
   ExtCtrls, ImgList, Menus,
-  JclBase,
-  JvTypes, JvWndProcHook, JVCLVer;
+  JvWndProcHook, JVCLVer;
 
 const
   // custom painter constants
@@ -384,7 +382,7 @@ type
     procedure Refresh;
     procedure Popup(X, Y: Integer); override;
     procedure DefaultDrawItem(Item: TMenuItem; Rect: TRect;
-      State: TMenuOwnerDrawState);
+      State: TMenuOwnerDrawState); deprecated {$IFDEF SUPPORTS_DEPRECATED_DETAILS}'DefaultDrawItem calls DrawItem that is also called by OnDrawItem. As such, it is useless and even dangerous if you call it from OnDrawItem handler.'{$ENDIF SUPPORTS_DEPRECATED_DETAILS};
     procedure Rebuild(ForceIfLoading: Boolean = False);
 
     property Canvas: TCanvas read GetCanvas;
@@ -774,11 +772,11 @@ const
 implementation
 
 uses
-  CommCtrl, Consts, Math, Types,
+  CommCtrl, Math, Types,
   {$IFNDEF COMPILER7_UP}
   JvWin32,
   {$ENDIF ~COMPILER7_UP}
-  JclGraphUtils, JclSysInfo, JvConsts, JvJCLUtils, JvJVCLUtils;
+  JclGraphUtils, JvConsts, JvJCLUtils, JvJVCLUtils;
 
 const
   Separator = '-';
@@ -867,7 +865,7 @@ begin
           if Item <> nil then
           begin
             Mesg := AMsg;
-            TWMMeasureItem(Mesg).MeasureItemStruct^.itemData := Longint(Item);
+            TWMMeasureItem(Mesg).MeasureItemStruct^.itemData := ULONG_PTR(Item);
             Menu.Dispatch(Mesg);
             Result := 1;
             Handled := True;
@@ -880,7 +878,7 @@ begin
           if Item <> nil then
           begin
             Mesg := AMsg;
-            TWMDrawItem(Mesg).DrawItemStruct^.itemData := Longint(Item);
+            TWMDrawItem(Mesg).DrawItemStruct^.itemData := ULONG_PTR(Item);
             Menu.Dispatch(Msg);
             Result := 1;
             Handled := True;
@@ -1765,14 +1763,12 @@ begin
   end;
 end;
 
+{$WARNINGS OFF} // prevent compiler from showing the deprecated warning in Delphi 6
 procedure TJvPopupMenu.DefaultDrawItem(Item: TMenuItem; Rect: TRect;
   State: TMenuOwnerDrawState);
+{$WARNINGS ON}
 begin
-  if Canvas.Handle <> 0 then
-  begin
-    GetActiveItemPainter.Menu := Self;
-    GetActiveItemPainter.Paint(Item, Rect, State);
-  end;
+  DrawItem(Item, Rect, State)
 end;
 
 procedure TJvPopupMenu.DrawItem(Item: TMenuItem; Rect: TRect;
@@ -2576,7 +2572,7 @@ begin
   end
   else
   begin
-    MessageBox('!!! asked to draw nil item !!!'#13#10 +
+    JvMessageBox('!!! asked to draw nil item !!!'#13#10 +
       'Please report this to the JVCL team, ' +
       'detailing the precise conditions in ' +
       'which this error occured.'#13#10 +
@@ -3474,6 +3470,12 @@ end;
 
 procedure TJvXPMenuItemPainter.DrawMenuBitmap(X, Y: Integer; Bitmap: TBitmap);
 begin
+  // to take the margin into account
+  if IsRightToLeft then
+    Inc(X, 3)
+  else
+    Dec(X, 3);
+
   if mdDisabled in FState then
     DrawDisabledBitmap(X, Y, Bitmap)
   else
@@ -3650,7 +3652,7 @@ begin
       begin
         GetWindowRect(CanvasWindow, WRect);
 
-        DefProc := Pointer(GetWindowLong(CanvasWindow, GWL_WNDPROC));
+        DefProc := Pointer(GetWindowLongPtr(CanvasWindow, GWL_WNDPROC));
         if (DefProc <> nil) and
            (DefProc <> @XPMenuItemPainterWndProc) and
            not (csDesigning in Menu.ComponentState) then
@@ -3985,8 +3987,7 @@ procedure TWindowList.AddHook(AHandle: THandle; OldProc, NewProc: Pointer);
 begin
   FWindowList.Add(Pointer(AHandle));
   FPrevProcList.Add(OldProc);
-
-  SetWindowLong(AHandle, GWL_WNDPROC, Integer(NewProc));
+  SetWindowLongPtr(AHandle, GWL_WNDPROC, LONG_PTR(NewProc));
 end;
 
 function TWindowList.CallPrevWindowProc(hwnd: THandle; uMsg: UINT;
@@ -4022,7 +4023,11 @@ begin
   Index := FWindowList.IndexOf(Pointer(AHandle));
   if Index >= 0 then
   begin
+    {$IFDEF RTL230_UP}
+    SetWindowLongPtr(AHandle, GWL_WNDPROC, LONG_PTR(FPrevProcList[Index]));
+    {$ELSE}
     SetWindowLong(AHandle, GWL_WNDPROC, Integer(FPrevProcList[Index]));
+    {$ENDIF RTL230_UP}
 
     FWindowList.Delete(Index);
     FPrevProcList.Delete(Index);

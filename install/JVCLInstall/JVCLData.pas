@@ -84,6 +84,8 @@ type
     FJVCLConfig: TJVCLConfig;
     FJVCLRegistryConfig: TJVCLRegistryConfig;
 
+    FInstallSuccess: Boolean;
+
     procedure SetInstallMode(Value: TInstallMode);
     function GetFrameworkCount: Integer;
     function GetDxgettextDir: string;
@@ -103,6 +105,7 @@ type
     function GetJVCLPackagesDir: string;
 
     function GetTargetSymbol: string;
+    function GetMainTargetSymbol: string;
     function GetAutoDependencies: Boolean;
     function GetBuild: Boolean;
     function GetUnitOutDir: string;
@@ -122,18 +125,21 @@ type
     function GetDebugHppDir: string;
     function GetDebugBplDir: string;
     function GetDebugDcpDir: string;
+    function GetLogFileName: string;
   protected
     procedure Init; virtual;
     procedure DoCleanPalette(Reg: TRegistry; const Name: string;
       RemoveEmptyPalettes: Boolean);
     procedure ClearPackageCache(const Key: string; const AStartsWith: string);
-    function RegisterProjectGroupToIDE(ProjectGroup: TProjectGroup): Boolean;
+    procedure RegisterProjectGroupToIDE(ProjectGroup: TProjectGroup);
 
     procedure UpdateOptions;
     procedure EnableOption(const Name: string; Enable: Boolean; ForceEnable: Boolean = False);
   public
     property Target: TCompileTarget read GetTarget;
     property Owner: TJVCLData read FOwner;
+
+    procedure _SetBuildSuccess(Value: Boolean);
   public
     constructor Create(AOwner: TJVCLData; ATarget: TCompileTarget); reintroduce;
     destructor Destroy; override;
@@ -145,7 +151,7 @@ type
     procedure DeinstallJVCL(Progress: TDeinstallProgressEvent;
       DeleteFiles: TDeleteFilesEvent; RealUninstall: Boolean);
     procedure AddPathsToIDE;
-    function RegisterToIDE: Boolean;
+    procedure RegisterDesigntimePackages;
     procedure RegisterJVCLVersionInfo;
 
     function GetOutputDirs(DebugUnits: Boolean): TOutputDirs;
@@ -200,6 +206,9 @@ type
     property TargetSymbol: string read GetTargetSymbol;
       // TargetSymbol returns the symbol that is used in the xml files for this
       // target.
+    property MainTargetSymbol: string read GetMainTargetSymbol;
+      // MainTargetSymbol returns the symbol that is used in the xml files for this
+      // target's main version. It does not include the personal/standard flag
 
     property UnitOutDir: string read GetUnitOutDir;
       // UnitOutDir specifies the JVCL directory where the .dcu should go.
@@ -310,6 +319,10 @@ type
 
     property JclBplDir: string read GetJclBplDir;
       // JclBplDir returns the directory where the JclXx.bpl/JclVclXX.bpl files are.
+
+    property InstallSuccess: Boolean read FInstallSuccess;
+
+    property LogFileName: string read GetLogFileName;
   end;
 
   TJclLinkMapFile = function(ExecutableFileName, MapFileName: PChar;
@@ -385,6 +398,7 @@ type
 implementation
 
 uses
+  JclFileUtils,
   Utils, CmdLineUtils, PackageInformation, JediRegInfo;
 
 resourcestring
@@ -839,6 +853,8 @@ begin
     AddPaths(Target.SearchPaths, {Add:=}DeveloperInstall, Owner.JVCLDir,
       ['run']); // do not localize
   end;
+
+  Target.SavePaths;
 end;
 
 function TTargetConfig.CanInstallJVCL: Boolean;
@@ -958,6 +974,11 @@ begin
     Result := Name;
 end;
 
+procedure TTargetConfig._SetBuildSuccess(Value: Boolean);
+begin
+  FInstallSuccess := Value;
+end;
+
 function TTargetConfig.VersionedJVCLXmlBpl(const Name: string): string;
 var
   Suffix: string;
@@ -1037,7 +1058,7 @@ begin
         ProjectGroup.Packages[i].Compile := Ini.ReadBool(ProjectGroup.BpgName, ProjectGroup.Packages[i].Info.Name, True)
       else
       begin
-        if Ini.ReadBool(ProjectGroup.BpgName + ' Designtime', ProjectGroup.Packages[i].Info.Name, False) then
+        if Ini.ReadBool(ProjectGroup.BpgName + ' Designtime', ProjectGroup.Packages[i].Info.Name, False) then // do not localize
           ProjectGroup.Packages[i].Install := True;
       end;
   finally
@@ -1088,7 +1109,21 @@ begin
     else
       Pers := 'p'; // do not localize
   end;
-  Result := Format('%s%d%s', [Target.TargetType, Target.Version, Pers]); // do not localize
+  Result := Format('%s%s', [MainTargetSymbol, Pers]); // do not localize
+end;
+
+function TTargetConfig.GetMainTargetSymbol: string;
+var
+  PlatformPostfix: string;
+begin
+  PlatformPostfix := '';
+  case Target.Platform of
+    ctpWin32:
+      PlatformPostfix := '';
+    ctpWin64:
+      PlatformPostfix := '_x64'; // do not localize
+  end;
+  Result := Format('%s%d%s', [Target.TargetType, Target.Version, PlatformPostfix]); // do not localize
 end;
 
 function TTargetConfig.GetUnitOutDir: string;
@@ -1249,6 +1284,11 @@ begin
   Result := FLinkMapFiles;
 end;
 
+function TTargetConfig.GetLogFileName: string;
+begin
+  Result := PathAddSeparator(ExtractFilePath(ParamStr(0))) + 'jvcl_install_' + LowerCase(GetMainTargetSymbol) + '.log'; 
+end;
+
 function TTargetConfig.GetCreateJdbgFiles: Boolean;
 begin
   Result := FCreateJdbgFiles;
@@ -1395,8 +1435,15 @@ begin
         Version := Target.IDEVersion + 6  // BDS 3 is Delphi 9
       else
         Version := Target.IDEVersion + 7; // BDS 7 is Delphi 14
-      Filename := GetJVCLDir + '\common\' + Format('jvcl%s%d%s.inc', // do not localize
-          [LowerCase(Target.TargetType), Version, AnsiLowerCase(Target.PlatformName)]);
+      if Target.PlatForm = ctpWin32 then
+        Filename := GetJVCLDir + '\common\' + Format('jvcl%s%d%s.inc', // do not localize
+            [LowerCase(Target.TargetType), Version, ''])
+      else if Target.PlatForm = ctpWin64 then
+        Filename := GetJVCLDir + '\common\' + Format('jvcl%s%d%s.inc', // do not localize
+            [LowerCase(Target.TargetType), Version, '_x64'])
+      else
+        Filename := GetJVCLDir + '\common\' + Format('jvcl%s%d%s.inc', // do not localize
+            [LowerCase(Target.TargetType), Version, AnsiLowerCase(Target.PlatformName)]);
     end
     else
       Filename := GetJVCLDir + '\common\' + Format('jvcl%s%d.inc', // do not localize
@@ -1459,7 +1506,7 @@ begin
   end;
 end;
 
-function TTargetConfig.RegisterProjectGroupToIDE(ProjectGroup: TProjectGroup): Boolean;
+procedure TTargetConfig.RegisterProjectGroupToIDE(ProjectGroup: TProjectGroup);
 var
   PackageIndex, i: Integer;
   KnownPackages, DisabledPackages: TDelphiPackageList;
@@ -1494,12 +1541,10 @@ begin
     end;
   end;
 
-  ProjectGroup.Target.SavePaths;
   ProjectGroup.Target.SavePackagesLists;
-  Result := True;
 end;
 
-function TTargetConfig.RegisterToIDE: Boolean;
+procedure TTargetConfig.RegisterDesigntimePackages;
 var
   Kind: TPackageGroupKind;
   i: Integer;
@@ -1520,7 +1565,7 @@ begin
         end;
       end;
     end;
-    Result := RegisterProjectGroupToIDE(AllPackages);
+    RegisterProjectGroupToIDE(AllPackages);
   finally
     AllPackages.Free;
   end;

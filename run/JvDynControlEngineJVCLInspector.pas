@@ -24,7 +24,6 @@ Known Issues:
 unit JvDynControlEngineJVCLInspector;
 
 {$I jvcl.inc}
-{$I vclonly.inc}
 
 interface
 
@@ -32,7 +31,7 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  ActnList, Graphics, ComCtrls, ImgList,
+  Graphics,
   Classes,
   Controls, JvInspector, JvDynControlEngineIntf, JvDynControlEngine;
 
@@ -105,7 +104,7 @@ implementation
 
 uses
   SysUtils, Variants,
-  JvDynControlEngineTools, JvDynControlEngineVCL, JvJCLUtils;
+  JvJCLUtils;
 
 
 //=== { TJvDynControlRTTIInspectorControl } ========================================

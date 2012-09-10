@@ -37,8 +37,11 @@ uses
   SysUtils, Classes,
   Windows, Messages, Graphics, Controls,
   ExtCtrls, Menus, Forms, ImgList, ActnList, Buttons,
-  CommCtrl, JvJCLUtils,
-  JvComponent, JvButton;
+  CommCtrl,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
+  JvJCLUtils, JvButton;
 
 type
   TJvFrameStyle =
@@ -132,6 +135,7 @@ type
     FNumGlyphs: TNumGlyphs;
     FKeepMouseLeavePressed: Boolean;
     FImages: TJvTransparentButtonImages;
+    FGlyphStretched: Boolean;
     procedure SetGlyph(Bmp: TBitmap);
     procedure SetNumGlyphs(Value: TNumGlyphs);
     procedure CalcGlyphCount;
@@ -145,6 +149,7 @@ type
     procedure SetTransparent(Value: Boolean);
     procedure SetBorderWidth(Value: Cardinal);
     function GetUseImages: Boolean;
+    procedure SetGlyphStretched(const Value: Boolean);
   protected
     procedure PaintButton(Canvas: TCanvas); override;
     procedure PaintFrame(Canvas: TCanvas); override;
@@ -213,6 +218,7 @@ type
     property OnStartDrag;
 
     property Glyph: TBitmap read FGlyph write SetGlyph;
+    property GlyphStretched: Boolean read FGlyphStretched write SetGlyphStretched default False;
     property NumGlyphs: TNumGlyphs read FNumGlyphs write SetNumGlyphs default 1;
     property KeepMouseLeavePressed: Boolean read FKeepMouseLeavePressed write FKeepMouseLeavePressed default False;
     property Images: TJvTransparentButtonImages read FImages write SetImages;
@@ -240,7 +246,7 @@ const
 implementation
 
 uses
-  JvConsts, JvJVCLUtils;
+  JvConsts;
 
 { create a grayed version of a color bitmap }
 { SLOW! don't use in realtime! }
@@ -1075,6 +1081,15 @@ begin
   Invalidate;
 end;
 
+procedure TJvTransparentButton.SetGlyphStretched(const Value: Boolean);
+begin
+  if FGlyphStretched <> Value then
+  begin
+    FGlyphStretched := Value;
+    Invalidate;
+  end;
+end;
+
 procedure TJvTransparentButton.SetNumGlyphs(Value: TNumGlyphs);
 begin
   if FNumGlyphs <> Value then
@@ -1093,6 +1108,7 @@ var
   Index: TImageIndex;
   HelpRect: TRect;
   Icon: TIcon;
+  Bitmap: TBitmap;
 begin
   if FImList.Count = 0 then
     Exit;
@@ -1173,13 +1189,26 @@ begin
     Self.Canvas.FillRect(HelpRect);
   end;
 
-  // Use a TIcon instead of FImList.Draw to avoid triggering Mantis 3851
-  Icon := TIcon.Create;
-  try
-    FImList.GetIcon(Index, Icon);
-    Canvas.Draw(ARect.Left, ARect.Top, Icon);
-  finally
-    Icon.Free;
+  if GlyphStretched then
+  begin
+    Bitmap := TBitmap.Create;
+    try
+      FImList.GetBitmap(Index, Bitmap);
+      Canvas.StretchDraw(ClientRect, Bitmap);
+    finally
+      Bitmap.Free;
+    end;
+  end
+  else
+  begin
+    // Use a TIcon instead of FImList.Draw to avoid triggering Mantis 3851
+    Icon := TIcon.Create;
+    try
+      FImList.GetIcon(Index, Icon);
+      Canvas.Draw(ARect.Left, ARect.Top, Icon);
+    finally
+      Icon.Free;
+    end;
   end;
 end;
 
@@ -1226,10 +1255,10 @@ begin
         Glyph.Width := 0;
         Glyph.Height := 0;
 
-        if not CheckDefaults or ((Images <> nil) and (Images.ActiveIndex = -1)) then
+        if not CheckDefaults or ((Images <> nil) and (Self.Images.ActiveIndex = -1)) then
         begin
-          Images.ActiveImage := ActionList.Images;
-          Images.ActiveIndex := ImageIndex;
+          Self.Images.ActiveImage := ActionList.Images;
+          Self.Images.ActiveIndex := ImageIndex;
         end;
       {end
       else

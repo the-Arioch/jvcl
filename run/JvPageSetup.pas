@@ -1,4 +1,4 @@
-﻿{-----------------------------------------------------------------------------
+{-----------------------------------------------------------------------------
 The contents of this file are subject to the Mozilla Public License
 Version 1.1 (the "License"); you may not use this file except in compliance
 with the License. You may obtain a copy of the License at
@@ -24,7 +24,6 @@ Known Issues:
 unit JvPageSetup;
 
 {$I jvcl.inc}
-{$I vclonly.inc}
 
 interface
 
@@ -33,6 +32,7 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Classes, Messages, Graphics, CommDlg, Dialogs,
+  JclBase,
   JvBaseDlg;
 
 const
@@ -102,7 +102,7 @@ type
     FPageSetupRec: TPageSetupDlg;
     FPaintWhat: TJvPSPaintWhat;
     procedure SetOptions(Value: TJvPageOptions);
-    function DoExecute(Show: Boolean): Boolean;
+    function DoExecute(ParentWnd: HWND; Show: Boolean): Boolean;
     procedure ReadMargin(AMargin: TJvMarginSize; Reader: TReader);
     procedure WriteMargin(AMargin: TJvMarginSize; Writer: TWriter);
     procedure ReadValues(AReader: TReader);
@@ -122,7 +122,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    function Execute: Boolean; override;
+    function Execute(ParentWnd: HWND): Boolean; overload; override;
     procedure GetDefaults; virtual;
     property PaperSize: TPoint read FPaperSize;
   published
@@ -270,12 +270,7 @@ end;
 // Generic dialog hook. Centers the dialog on the screen in response to
 // the WM_INITDIALOG message
 
-{$IFNDEF RTL230_UP}
-type
-  LONG_PTR = LongInt;
-{$ENDIF ~RTL230_UP}
-
-function DialogHook(Wnd: HWND; Msg: UINT; AWParam: WPARAM; ALParam: LPARAM): {$IFDEF RTL230_UP}UINT_PTR{$ELSE}UINT{$ENDIF RTL230_UP}; stdcall;
+function DialogHook(Wnd: HWND; Msg: UINT; AWParam: WPARAM; ALParam: LPARAM): UINT_PTR; stdcall;
 begin
   Result := 0;
   if Msg = WM_INITDIALOG then
@@ -283,15 +278,13 @@ begin
     CenterWindow(Wnd);
     THackCommonDialog(CreationControl).FHandle := Wnd;
     THackCommonDialog(CreationControl).FDefWndProc :=
-      Pointer({$IFDEF RTL230_UP}SetWindowLongPtr{$ELSE}SetWindowLong{$ENDIF RTL230_UP}(Wnd, GWL_WNDPROC,
-      LONG_PTR(THackCommonDialog(CreationControl).FObjectInstance)));
-    CallWindowProc(THackCommonDialog(CreationControl).FObjectInstance, Wnd,
-      Msg, AWParam, ALParam);
+      Pointer(SetWindowLongPtr(Wnd, GWL_WNDPROC, LONG_PTR(THackCommonDialog(CreationControl).FObjectInstance)));
+    CallWindowProc(THackCommonDialog(CreationControl).FObjectInstance, Wnd, Msg, AWParam, ALParam);
     CreationControl := nil;
   end;
 end;
 
-function PageDrawHook(Wnd: HWND; Msg: UINT; AWParam: WPARAM; ALParam: LPARAM): {$IFDEF RTL230_UP}UINT_PTR{$ELSE}UINT{$ENDIF RTL230_UP}; stdcall;
+function PageDrawHook(Wnd: HWND; Msg: UINT; AWParam: WPARAM; ALParam: LPARAM): UINT_PTR; stdcall;
 const
   PagePaintWhat: array [WM_PSD_FULLPAGERECT..WM_PSD_YAFULLPAGERECT] of TJvPSPaintWhat =
    (pwFullPage, pwMinimumMargins, pwMargins,
@@ -363,7 +356,7 @@ end;
 
 function CopyData(Handle: THandle): THandle;
 var
-  Src, Dest: {$IFDEF COMPILER12_UP}PByte{$ELSE}PChar{$ENDIF COMPILER12_UP};
+  Src, Dest: PByte;
   Size: Integer;
 begin
   if Handle <> 0 then
@@ -499,8 +492,7 @@ procedure TJvPageSetupDialog.WMCommand(var Msg: TWMCommand);
 const
   IDPRINTERBTN = $0402;
 begin
-  if not ((Msg.ItemID = IDPRINTERBTN) and
-    (Msg.NotifyCode = BN_CLICKED) and DoPrinter) then
+  if not ((Msg.ItemID = IDPRINTERBTN) and (Msg.NotifyCode = BN_CLICKED) and DoPrinter) then
     inherited;
 end;
 
@@ -556,32 +548,32 @@ type
 var
   ActiveWindow: HWND;
   WindowList: Pointer;
-  {$IFNDEF DELPHI64_TEMPORARY}
+  {$IFDEF CPU86}
   FPUControlWord: Word;
-  {$ENDIF ~DELPHI64_TEMPORARY}
+  {$ENDIF CPU86}
 begin
   ActiveWindow := GetActiveWindow;
   WindowList := DisableTaskWindows(0);
   try
     Application.HookMainWindow(MessageHook);
-    {$IFNDEF DELPHI64_TEMPORARY}
+    {$IFDEF CPU86}
     asm
       // Avoid FPU control word change in NETRAP.dll, NETAPI32.dll, etc
       FNSTCW  FPUControlWord
     end;
-    {$ENDIF ~DELPHI64_TEMPORARY}
+    {$ENDIF CPU86}
     try
       CreationControl := Self;
       PageSetupControl := Self;
       Result := TDialogFunc(DialogFunc)(DialogData);
     finally
       PageSetupControl := nil;
-      {$IFNDEF DELPHI64_TEMPORARY}
+      {$IFDEF CPU86}
       asm
         FNCLEX
         FLDCW FPUControlWord
       end;
-      {$ENDIF ~DELPHI64_TEMPORARY}
+      {$ENDIF CPU86}
       Application.UnhookMainWindow(MessageHook);
     end;
   finally
@@ -590,7 +582,7 @@ begin
   end;
 end;
 
-function TJvPageSetupDialog.DoExecute(Show: Boolean): Boolean;
+function TJvPageSetupDialog.DoExecute(ParentWnd: HWND; Show: Boolean): Boolean;
 var
   PageDlgRec: TPageSetupDlg;
   DevHandle: THandle;
@@ -601,7 +593,7 @@ begin
   with PageDlgRec do
   begin
     lStructSize := SizeOf(PageDlgRec);
-    hwndOwner := Application.Handle;
+    hwndOwner := ParentWnd;
     Flags := FFlags;
     rtMinMargin := Rect(FMinMargin.Left, FMinMargin.Top, FMinMargin.Right,
       FMinMargin.Bottom);
@@ -649,16 +641,16 @@ begin
   end;
 end;
 
-function TJvPageSetupDialog.Execute: Boolean;
+function TJvPageSetupDialog.Execute(ParentWnd: HWND): Boolean;
 begin
-  Result := DoExecute(True);
+  Result := DoExecute(ParentWnd, True);
 end;
 
 // Get default margin values
 
 procedure TJvPageSetupDialog.GetDefaults;
 begin
-  DoExecute(False);
+  DoExecute(GetActiveWindow, False);
 end;
 
 procedure TJvPageSetupDialog.SetOptions(Value: TJvPageOptions);

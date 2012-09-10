@@ -34,22 +34,29 @@ procedure Register;
 implementation
 
 uses
+  {$IFDEF HAS_UNIT_SYSTEM_ACTIONS}
+  System.Actions,
+  {$ENDIF HAS_UNIT_SYSTEM_ACTIONS}
   Classes, ComCtrls, ActnList,
   DesignEditors, DesignIntf,
   JvDsgnConsts,
   {$IFDEF JV_MIDAS}
   JvDBRemoteLogin,
   {$ENDIF JV_MIDAS}
-  {$IFDEF USE_3RDPARTY_DOA} 
+  {$IFDEF USE_3RDPARTY_DOA}
   JvOracleDataset,
   JvDBPasswordDialogDoa,
   JvDBLogonDialogDoa,
   {$ENDIF USE_3RDPARTY_DOA}
-  {$IFDEF USE_3RDPARTY_CORELAB_ODAC} 
+  {$IFDEF USE_3RDPARTY_DEVART_ODAC} 
   JvDBPasswordDialogOdac,
   JvDBLogonDialogOdac,
   JvOdacSmartQuery,
-  {$ENDIF USE_3RDPARTY_CORELAB_ODAC}
+  {$ENDIF USE_3RDPARTY_DEVART_ODAC}
+  {$IFDEF USE_3RDPARTY_DEVART_UNIDAC} 
+  JvDBLogonDialogUniDac,
+  JvUniDacQuery,
+  {$ENDIF USE_3RDPARTY_DEVART_UNIDAC}
   JvADOQuery,
   JvMemoryDataset, JvDBDatePickerEdit, JvDBDateTimePicker, JvDBLookupTreeView,
   JvDBProgressBar, JvDBRichEdit, JvDBSpinEdit, JvDBTreeView, JvDBLookup,
@@ -58,7 +65,9 @@ uses
   JvDBSearchComboBox, JvAppDBStorage, JvDBFindEdit, JvDBImage, JvDBEditors,
   JvDBMemDatasetEditor, JvDBGridExportEditors, JvDBGridEditors, JvCsvDataEditor,
   JvDBActionsEngine, JvDBActions, JvDBCheckBox,
-  JvDBActnResForm, JvDataSource, JvDataSourceIntf;
+  JvDBActnResForm, JvDataSource, JvDataSourceIntf,
+  JvDynControlEngineVCL // This prevents runtime error messages about not initialized JvDynControlEngine
+  ;
 
 {$R JvDBReg.dcr}
 
@@ -67,6 +76,7 @@ const
   cDataField = 'DataField';
   cKeyField = 'KeyField';
   cListField = 'ListField';
+  cDisplayField = 'DisplayField';
   cListKeyField = 'ListKeyField';
   cMasterField = 'MasterField';
   cDetailField = 'DetailField';
@@ -85,10 +95,14 @@ begin
     {$IFDEF USE_3RDPARTY_DOA} 
     TJvOracleDataset, TJvDBDoaLogonDialog, TJvDBDoaPasswordDialog,
     {$ENDIF USE_3RDPARTY_DOA}
-    {$IFDEF USE_3RDPARTY_CORELAB_ODAC} 
+    {$IFDEF USE_3RDPARTY_DEVART_ODAC} 
     TJvDBOdacConnectDialog, TJvDBOdacPasswordDialog, TjvOdacSmartQuery,
     TjvOdacOraTable, TjvOdacOraQuery,
-    {$ENDIF USE_3RDPARTY_CORELAB_ODAC}
+    {$ENDIF USE_3RDPARTY_DEVART_ODAC}
+    {$IFDEF USE_3RDPARTY_DEVART_UNIDAC} 
+    TJvDBUniDacConnectDialog, 
+    TjvUniDacUniTable, TjvUniDacUniQuery,
+    {$ENDIF USE_3RDPARTY_DEVART_UNIDAC}
     TJvADOQuery, TJvADODataSet,
     TJvDBGridWordExport, TJvDBGridExcelExport, TJvDBGridHTMLExport,
     TJvDBGridCSVExport, TJvDBGridXMLExport, TJvDatabaseActionList]);
@@ -107,7 +121,10 @@ begin
   RegisterPropertyEditor(TypeInfo(TDataFieldString), TJvDataConnector, cListField, TJvListFieldProperty);
   RegisterPropertyEditor(TypeInfo(TDataFieldString), TJvDataConnector, cListKeyField, TJvListFieldProperty);
   RegisterPropertyEditor(TypeInfo(TDataFieldString), TJvDataConnector, cLookupField, TJvLookupSourceProperty);
-  
+
+  RegisterPropertyEditor(TypeInfo(string), TJvDBComboBoxListSettings, cKeyField, TJvDataFieldProperty);
+  RegisterPropertyEditor(TypeInfo(string), TJvDBComboBoxListSettings, cDisplayField, TJvDataFieldProperty);
+
   RegisterPropertyEditor(TypeInfo(string), TJvLookupControl, cLookupField, TJvLookupSourceProperty);
   RegisterPropertyEditor(TypeInfo(string), TJvDBLookupEdit, cLookupField, TJvLookupSourceProperty);
   RegisterPropertyEditor(TypeInfo(string), TJvDBTreeView, cItemField, TJvDataFieldProperty);
@@ -136,6 +153,9 @@ begin
   RegisterPropertyEditor(TypeInfo(TStatusPanels), TJvDBGridFooter, cPanels, nil);
 
   RegisterComponentEditor(TJvMemoryData, TJvMemDataSetEditor);
+
+  RegisterComponentEditor(TJvCsvDataSet, TJvCSVDataSetComponentEditor);
+
 
   RegisterActions(RsJVCLDBActionsCategory, [TJvDatabaseFirstAction,
     TJvDatabaseLastAction, TJvDatabaseNextAction, TJvDatabasePriorAction,

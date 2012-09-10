@@ -47,7 +47,6 @@ Notes (2003-05-21) // Remko Bonte
 unit JvListBox;
 
 {$I jvcl.inc}
-{$I vclonly.inc}
 
 interface
 
@@ -56,6 +55,9 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Messages, SysUtils, Classes, Graphics, StdCtrls, Controls, Forms,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvItemsSearchs, JvDataProvider, JvDataProviderIntf, JvExStdCtrls;
 
 type
@@ -407,8 +409,7 @@ uses
   Types,
   {$ENDIF COMPILER10_UP}
   RTLConsts,
-  JclBase,
-  JvJCLUtils, JvJVCLUtils, JvConsts, JvCtrls, JvResources;
+  JvJCLUtils, JvJVCLUtils, JvConsts, JvResources;
 
 const
   AlignFlags: array [TAlignment] of DWORD = (DT_LEFT, DT_RIGHT, DT_CENTER);
@@ -476,7 +477,7 @@ begin
   else
   begin
     Result := TObject(ListBox.GetItemData(Index));
-    if Longint(Result) = LB_ERR then
+    if LPARAM(Result) = LPARAM(LB_ERR) then
       Error(SListIndexError, Index);
   end;
 end;
@@ -511,7 +512,7 @@ begin
     if (Index <> -1) and not (ListBox.Style in [lbVirtual, lbVirtualOwnerDraw]) then
     begin
       ListBox.DeselectProvider;
-      ListBox.SetItemData(Index, Longint(AObject));
+      ListBox.SetItemData(Index, LPARAM(AObject));
     end;
   end;
 end;
@@ -896,6 +897,8 @@ begin
   else
     Size := Canvas.TextExtent(S);
   Inc(Size.cx, CLeftMargin);
+  if Size.cy = 0 then // 0 is an invalid size for a ImageList
+    Size.cy := 1;
 
   FDragImage.Width := Size.cx;
   FDragImage.Height := Size.cy;

@@ -40,6 +40,9 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Messages, Classes, Controls, ImgList,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvToolEdit;
 
 type
@@ -301,6 +304,8 @@ type
     property OnMouseUp;
     property OnContextPopup;
     property OnStartDrag;
+    property OnPopupHidden;
+    property OnPopupShown;
   end;
 
 {$IFDEF UNITVERSIONING}
@@ -316,8 +321,7 @@ const
 implementation
 
 uses
-  SysUtils, Math, Consts, Graphics,
-//  JclLogic,
+  SysUtils, Math, Graphics,
   JvJCLUtils, JvCalc, JvConsts, JvResources, JclSysUtils;
 
 {$R JvBaseEdits.Res}
@@ -644,7 +648,7 @@ end;
 {WAP added GetEditFormat, this code used to be ininline inside DataChanged.}
 function TJvCustomNumEdit.GetEditFormat:String;
 begin
-  Result := '0';
+  Result := ',0';  // must put the thousands separator by default to allow direct edit of value (paste for example)
   if FDecimalPlaces > 0 then
     if FDecimalPlacesAlwaysShown then
        Result  := Result + '.' + MakeStr('0', FDecimalPlaces)
@@ -930,7 +934,6 @@ begin
     Invalidate;
 end;
 
-
 procedure TJvCustomNumEdit.WMPaint(var Msg: TWMPaint);
 var
   S: string;
@@ -943,9 +946,6 @@ begin
     FFocused and not PopupVisible, FCanvas, Msg) then
     inherited;
 end;
-
-
-
 
 procedure TJvCustomNumEdit.FontChanged;
 begin
@@ -1027,7 +1027,6 @@ begin
   begin
     Bmp := TBitmap.Create;
     try
-      //Bmp.Handle := LoadBitmap(HInstance, sCalcBmp);
       Bmp.LoadFromResourceName(HInstance, sCalcBmp);
       GCalcImageIndex := DefaultImages.AddMasked(Bmp, clFuchsia);
     finally

@@ -598,6 +598,10 @@ const
 implementation
 
 uses
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
+  Types,
   {$IFDEF JVCLThemesEnabled}
   JvThemes,
   {$ENDIF JVCLThemesEnabled}
@@ -2452,6 +2456,9 @@ begin
   if AOwner is TJvDockTabHostForm then
   begin
     FTabImageList := TCustomImageList.Create(AOwner);
+    {$IFDEF RTL200_UP}
+    FTabImageList.ColorDepth := cd32Bit;
+    {$ENDIF RTL200_UP}
     Images := FTabImageList;
   end;
 end;
@@ -3902,7 +3909,6 @@ end;
 
 // (rom) unused writeable const option removed
 
-{$IFDEF DELPHI6_UP}
 procedure TJvDockVIDDragDockObject.DefaultDockImage(Erase: Boolean);
 var
   DrawRect: TRect;
@@ -3924,7 +3930,7 @@ begin
   if FIsTabDockOver and Assigned(FDropTabControl) then
   begin
     TabControlRect := FDropTabControl.BoundsRect;
-    TabControlRect := Rect(FDropTabControl.ClientToScreen(TabControlRect.TopLeft),
+    TabControlRect := Classes.Rect(FDropTabControl.ClientToScreen(TabControlRect.TopLeft),
                      FDropTabControl.ClientToScreen(TabControlRect.BottomRight));
     // This is to make sure the TabControlRect is included in the DrawRect
     if PtInRect(DrawRect, TabControlRect.TopLeft) and
@@ -3982,77 +3988,6 @@ begin
     end;
   end;
 end;
-{$ELSE}
-procedure TJvDockVIDDragDockObject.DefaultDockImage(Erase: Boolean);
-const
-  LeftOffset = 4;
-var
-  DesktopWindow: HWND;
-  DC: HDC;
-  OldBrush: HBrush;
-  DrawRect: TRect;
-  PenSize: Integer;
-  ABrush: TBrush;
-  ButtomOffset: Integer;
-  MaxTabWidth: Integer;
-
-  procedure DoDrawDefaultImage;
-  var
-    R: PRect;
-  begin
-    R := @DrawRect;
-    PatBlt(DC, R.Left + PenSize, R.Top, R.Right - R.Left - PenSize, PenSize, PATINVERT);
-    PatBlt(DC, R.Right - PenSize, R.Top + PenSize, PenSize, R.Bottom - R.Top - PenSize, PATINVERT);
-    PatBlt(DC, R.Left, R.Bottom - PenSize, R.Right - R.Left - PenSize, PenSize, PATINVERT);
-    PatBlt(DC, R.Left, R.Top, PenSize, R.Bottom - R.Top - PenSize, PATINVERT);
-  end;
-
-  procedure DoDrawTabImage;
-  var
-    R: PRect;
-  begin
-    R := @DrawRect;
-    ButtomOffset := 15;
-    MaxTabWidth := 30;
-
-    PatBlt(DC, R.Left + PenSize, R.Top, R.Right - R.Left - PenSize, PenSize, PATINVERT);
-    PatBlt(DC, R.Right - PenSize, R.Top + PenSize, PenSize, R.Bottom - R.Top - 2 * PenSize - ButtomOffset, PATINVERT);
-
-    if R.Right - R.Left - 2 * PenSize < LeftOffset + 2 * PenSize + 2 * MaxTabWidth then
-      MaxTabWidth := (R.Right - R.Left - 4 * PenSize - LeftOffset) div 2;
-
-    if R.Bottom - R.Top - 2 * PenSize < 2 * ButtomOffset then
-      ButtomOffset := Max((R.Bottom - R.Top - 2 * PenSize) div 2, 0);
-
-    PatBlt(DC, R.Left, R.Bottom - PenSize - ButtomOffset, 2 * PenSize + LeftOffset, PenSize, PATINVERT);
-    PatBlt(DC, R.Left + PenSize + LeftOffset, R.Bottom - ButtomOffset, PenSize, ButtomOffset, PATINVERT);
-    PatBlt(DC, R.Left + 2 * PenSize + LeftOffset, R.Bottom - PenSize, MaxTabWidth, PenSize, PATINVERT);
-    PatBlt(DC, R.Left + 2 * PenSize + LeftOffset + MaxTabWidth, R.Bottom - PenSize - ButtomOffset, PenSize, PenSize +
-      ButtomOffset, PATINVERT);
-    PatBlt(DC, R.Left + 3 * PenSize + LeftOffset + MaxTabWidth, R.Bottom - PenSize - ButtomOffset, R.Right - R.Left - 3 *
-      PenSize - LeftOffset - MaxTabWidth, PenSize, PATINVERT);
-
-    PatBlt(DC, R.Left, R.Top, PenSize, R.Bottom - R.Top - PenSize - ButtomOffset, PATINVERT);
-  end;
-
-begin
-  FErase := Erase;
-  GetBrush_PenSize_DrawRect(ABrush, PenSize, DrawRect, Erase);
-
-  DesktopWindow := GetDesktopWindow;
-  DC := GetDCEx(DesktopWindow, 0, DCX_CACHE or DCX_LOCKWINDOWUPDATE);
-  try
-    OldBrush := SelectObject(DC, ABrush.Handle);
-    if not FIsTabDockOver then
-      DoDrawDefaultImage
-    else
-      DoDrawTabImage;
-    SelectObject(DC, OldBrush);
-  finally
-    ReleaseDC(DesktopWindow, DC);
-  end;
-end;
-{$ENDIF DELPHI6_UP}
 
 function TJvDockVIDDragDockObject.DragFindWindow(const Pos: TPoint): THandle;
 begin

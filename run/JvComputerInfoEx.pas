@@ -163,7 +163,10 @@ type
 
   TWMDeviceChange = record
     Msg: Cardinal;
-    Event: {$IFDEF DELPHI64_TEMPORARY}WPARAM{$ELSE}UINT{$ENDIF};
+    {$IFDEF COMPILER16_UP}
+    MsgFiller: TDWordFiller;
+    {$ENDIF COMPILER16_UP}
+    Event: WPARAM;
     dwData: Pointer;
     Result: LRESULT;
   end;
@@ -1464,7 +1467,7 @@ const
 implementation
 
 uses
-  WinInet, Registry,
+  Registry,
   JclShell, JclRegistry, JclFileUtils,
   JvJCLUtils, // Include/ExcludeTrailingPathDelimiter
   JvResources;

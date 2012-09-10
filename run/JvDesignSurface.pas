@@ -41,7 +41,7 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Messages, SysUtils, Classes, Controls, Graphics,
-  Forms, ExtCtrls, Contnrs;
+  Forms, ExtCtrls;
 
 type
   TJvDesignSurface = class;
@@ -283,7 +283,7 @@ const
 implementation
 
 uses
-  Clipbrd,
+  Types,
   JvDesignUtils, JvDesignClip, JvDesignImp, JvResources, JvTypes;
 
 //=== { TJvDesignCustomMessenger } ===========================================
@@ -381,14 +381,8 @@ begin
 end;
 
 function TJvDesignCustomController.GetShift: TShiftState;
-// obones: For C5/D5 compatibility, we must use a local variable
-// as KeyboardStateToShiftState with no parameters was introduced
-// in D6/C6
-var
-  KeyState: TKeyBoardState;
 begin
-  GetKeyboardState(KeyState);
-  Result := KeyboardStateToShiftState(KeyState);
+  Result := KeyboardStateToShiftState;
 end;
 
 //=== { TJvDesignCustomSelector } ============================================

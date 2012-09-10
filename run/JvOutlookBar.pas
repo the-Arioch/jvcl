@@ -56,7 +56,9 @@ uses
   TmSchema,
   {$ENDIF !COMPILER7_UP}
   {$ENDIF JVCLThemesEnabled}
-
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvJCLUtils, JvThemes, JvComponent, JvExButtons;
 
 const
@@ -92,11 +94,12 @@ type
     FActionLink: TJvOutlookBarButtonActionLink;
     FImageIndex: TImageIndex;
     FCaption: TCaption;
-    FTag: Integer;
+    FTag: NativeInt;
     FDown: Boolean;
     FEnabled: Boolean;
     FAutoToggle: Boolean;
     FOnClick: TNotifyEvent;
+    FLinkedObject: TObject;
     procedure SetCaption(const Value: TCaption);
     procedure SetImageIndex(const Value: TImageIndex);
     procedure SetDown(const Value: Boolean);
@@ -116,11 +119,14 @@ type
     destructor Destroy; override;
     procedure Assign(Source: TPersistent); override;
     procedure EditCaption;
+
+    // A property for user's usage, allowing to link an object to the button
+    property LinkedObject: TObject read FLinkedObject write FLinkedObject;
   published
     property Action: TBasicAction read GetAction write SetAction;
     property Caption: TCaption read FCaption write SetCaption;
     property ImageIndex: TImageIndex read FImageIndex write SetImageIndex;
-    property Tag: Integer read FTag write FTag;
+    property Tag: NativeInt read FTag write FTag;
     property Down: Boolean read FDown write SetDown default False;
     property AutoToggle: Boolean read FAutoToggle write FAutoToggle;
     property Enabled: Boolean read FEnabled write SetEnabled default True;
@@ -189,6 +195,9 @@ type
     procedure EditCaption;
     property DownButton: TJvOutlookBarButton read GetDownButton write SetDownButton;
     property DownIndex: Integer read GetDownIndex write SetDownIndex;
+
+    // A property for user's usage, allowing to link an objet to the page.
+    property LinkedObject: TObject read FLinkedObject write FLinkedObject;
   published
     property Alignment: TAlignment read FAlignment write SetAlignment default taCenter;
     property Buttons: TJvOutlookBarButtons read FButtons write SetButtons;
@@ -204,9 +213,6 @@ type
     property ParentColor: Boolean read FParentColor write SetParentColor;
     property TopButtonIndex: Integer read FTopButtonIndex write SetTopButtonIndex;
     property Enabled: Boolean read FEnabled write SetEnabled default True;
-
-    // A property for user's usage, allowing to link an objet to the page.
-    property LinkedObject: TObject read FLinkedObject write FLinkedObject;
   end;
 
   TJvOutlookBarPages = class(TOwnedCollection)
@@ -476,7 +482,7 @@ const
 implementation
 
 uses
-  Math,
+  Types, Math,
   JvConsts, JvJVCLUtils;
 
 {$R JvOutlookBar.res}
@@ -530,7 +536,7 @@ begin
   Parent := AParent;
   BorderStyle := bsNone;
   ParentFont := False;
-  Tag := Integer(AObject);
+  Tag := NativeInt(AObject);
 end;
 
 destructor TJvOutlookBarEdit.Destroy;
@@ -542,13 +548,13 @@ end;
 
 procedure TJvOutlookBarEdit.EditAccept;
 begin
-  Parent.Perform(CM_CAPTION_EDIT_ACCEPT, WPARAM(Self), Tag);
+  Parent.Perform(CM_CAPTION_EDIT_ACCEPT, WPARAM(Self), LPARAM(Tag));
   Hide;
 end;
 
 procedure TJvOutlookBarEdit.EditCancel;
 begin
-  Parent.Perform(CM_CAPTION_EDIT_CANCEL, WPARAM(Self), Tag);
+  Parent.Perform(CM_CAPTION_EDIT_CANCEL, WPARAM(Self), LPARAM(Tag));
   Hide;
 end;
 
@@ -2589,7 +2595,7 @@ var
   B: TJvOutlookBarButton;
   P: TJvOutlookBarPage;
 begin
-  TJvOutlookBarEdit(FEdit).Tag := Msg.WParam;
+  TJvOutlookBarEdit(FEdit).Tag := NativeInt(Msg.WParam);
 //  TJvOutlookBarEdit(FEdit).Font.Name := Pages[ActivePageIndex].Font.Name;
 //  TJvOutlookBarEdit(FEdit).Font.Size := Pages[ActivePageIndex].Font.Size;
   case Msg.LParam of
@@ -2729,8 +2735,6 @@ begin
     end;
 end;
 
-
-
 procedure TJvCustomOutlookBar.CMDialogChar(var Msg: TCMDialogChar);
 var
   I: Integer;
@@ -2759,9 +2763,6 @@ begin
   end;
   inherited;
 end;
-
-
-
 
 function TJvCustomOutlookBar.DoCustomDraw(ARect: TRect; Stage: TJvOutlookBarCustomDrawStage;
   Index: Integer; Down, Inside: Boolean): Boolean;
@@ -2855,7 +2856,6 @@ procedure TJvPageBtnProps.SetShadow(const Value: TColor);
 begin
   FShadow := Value;
 end;
-
 
 
 {$IFDEF UNITVERSIONING}

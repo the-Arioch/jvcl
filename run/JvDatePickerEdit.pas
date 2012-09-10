@@ -67,6 +67,9 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Messages, Classes, Controls, ImgList,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvCalendar, JvDropDownForm, JvCheckedMaskEdit, JvToolEdit;
 
 type
@@ -1176,6 +1179,7 @@ end;
 procedure TJvCustomDatePickerEdit.SetEditMask(const AValue: string);
 var
   OldSep: Char;
+  Designing: Boolean;
 begin
 {  if csDesigning in ComponentState then
     Exit;}
@@ -1183,7 +1187,22 @@ begin
   OldSep := JclFormatSettings.DateSeparator;
   JclFormatSettings.DateSeparator := Self.DateSeparator;
   try
-    inherited EditMask := AValue;
+    Designing := False;
+    if csDesigning in ComponentState then
+    begin
+      // If SetEditMask is called from CreateWnd via SetDateFormat, the TMaskEdit.SetCursor emulates
+      // a Shift+Left/Right key press. The form designer catches the key press and the
+      // IDE's Designer Guidelines code throws an access violation.
+      // With this we disable the form designer until "inherted EditMask" was executed.
+      Designing := True;
+      SetDesigning(False, False);
+    end;
+    try
+      inherited EditMask := AValue;
+    finally
+      if Designing then
+        SetDesigning(True, False);
+    end;
   finally
     JclFormatSettings.DateSeparator := OldSep;
   end;
@@ -1251,7 +1270,15 @@ end;
 procedure TJvCustomDatePickerEdit.ShowPopup(Origin: TPoint);
 begin
   if FPopup is TJvDropCalendar then
+  begin
     TJvDropCalendar(FPopup).Show;
+    if Assigned(OnPopupShown) then
+      OnPopupShown(Self);
+  end
+  else
+  begin
+    inherited ShowPopup(Origin);
+  end;
 end;
 
 procedure TJvCustomDatePickerEdit.UpdateDisplay;

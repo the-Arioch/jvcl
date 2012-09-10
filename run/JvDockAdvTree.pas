@@ -41,7 +41,7 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Messages, Classes, Graphics, Controls, Forms,
-  JvDockSupportClass, JvDockTree;
+  JvDockTree;
 
 type
   TJvDockAdvTree = class(TJvDockTree)
@@ -115,9 +115,6 @@ const
 {$ENDIF UNITVERSIONING}
 
 implementation
-
-uses
-  JvDockControlForm;
 
 //=== { TJvDockAdvTree } =====================================================
 

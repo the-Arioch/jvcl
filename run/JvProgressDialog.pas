@@ -91,7 +91,7 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  Classes, SysUtils, Graphics, Forms,
+  Windows, Classes, SysUtils, Graphics, Forms,
   JvBaseDlg;
 
 type
@@ -100,7 +100,7 @@ type
   {$IFDEF RTL230_UP}
   [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
   {$ENDIF RTL230_UP}
-  TJvProgressDialog = class(TJvCommonDialogF)
+  TJvProgressDialog = class(TJvCommonDialog)
   private
     FIMin: Integer;
     FIMax: Integer;
@@ -149,7 +149,7 @@ type
     destructor Destroy; override;
     procedure InitValues(AMin, AMax, AInterval, APosition: Integer; const ACaption, AText: string);
 
-    function Execute: Boolean; override;
+    function Execute(ParentWnd: HWND): Boolean; overload; override;
     function ShowModal: Integer;
 
     // (p3) Show, Hide and Cancelled are used in non-modal mode)
@@ -249,7 +249,7 @@ begin
   end;
 end;
 
-function TJvProgressDialog.Execute: Boolean;
+function TJvProgressDialog.Execute(ParentWnd: HWND): Boolean;
 begin
   Result := JvJVCLUtils.IsPositiveResult(ShowModal);
 end;

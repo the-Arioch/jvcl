@@ -43,13 +43,16 @@ uses
   {$IFDEF MSWINDOWS}
   Windows, Messages, ShellAPI, ActiveX,
   {$ENDIF MSWINDOWS}
+  Types,
   ShlObj,
   Variants,
   SysUtils, Classes, Graphics, Controls, Forms, Dialogs, StdCtrls, Menus,
   Buttons, FileCtrl, Mask, ImgList, ActnList, ExtDlgs,
-  JclBase,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
   JvConsts,
-  JvExControls, JvSpeedButton, JvTypes, JvExMask, JvExForms, JvButton,
+  JvExControls, JvSpeedButton, JvTypes, JvExMask,
   JvDataSourceIntf, JvBrowseFolder;
 
 const
@@ -559,6 +562,8 @@ type
     property LocalizedName: string read GetLocalizedName;
   published
     property AcceptFiles: Boolean read FAcceptFiles write SetAcceptFiles default True;
+    property AlwaysEnableButton default True;
+    property AlwaysShowPopup default True;
     property OnBeforeDialog: TExecOpenDialogEvent read FOnBeforeDialog write FOnBeforeDialog;
     property OnAfterDialog: TExecOpenDialogEvent read FOnAfterDialog write FOnAfterDialog;
     property OnDropFiles: TNotifyEvent read FOnDropFiles write FOnDropFiles;
@@ -878,6 +883,7 @@ type
     FDateFormat: string;
     FDateFormat2: string;
     FFormatting: Boolean;
+    FShowNullDate: Boolean;
     procedure SetMinDate(Value: TDateTime);
     procedure SetMaxDate(Value: TDateTime);
     function GetDate: TDateTime;
@@ -906,6 +912,7 @@ type
     function StoreMaxDate: Boolean;
     function FourDigitYear: Boolean;
     procedure WMContextMenu(var Msg: TWMContextMenu); message WM_CONTEXTMENU;
+    procedure SetShowNullDate(const Value: Boolean);
   protected
     FDateAutoBetween: Boolean;
     procedure SetDate(Value: TDateTime); virtual;
@@ -929,6 +936,7 @@ type
     function GetDefaultDateFormat: string; virtual;
     function GetDefaultDateFormatPreferred: TPreferredDateFormat; virtual;
     function CreateDataConnector: TJvCustomComboEditDataConnector; override;
+    function DisplayNullDateAsEmptyText: Boolean; virtual;
 
     property BlanksChar: Char read FBlanksChar write SetBlanksChar default ' ';
     property CalendarHints: TStrings read GetCalendarHints write SetCalendarHints;
@@ -953,6 +961,7 @@ type
     property MaxLength stored False;
     { Text is already stored via Date property }
     property Text stored False;
+    property ShowNullDate: Boolean read FShowNullDate write SetShowNullDate;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -1039,6 +1048,7 @@ type
     property ShowHint;
     property ShowButton;
     property CalendarStyle;
+    property ShowNullDate;
     property StartOfWeek;
     property Weekends;
     property WeekendColor;
@@ -1071,6 +1081,8 @@ type
     property DisabledTextColor;
     property DisabledColor;
     property OnKeyDown;
+    property OnPopupHidden;
+    property OnPopupShown;
 
     property DataConnector;
   end;
@@ -1108,8 +1120,11 @@ const
 implementation
 
 uses
-  RTLConsts, Math, Consts, MaskUtils,
+  RTLConsts, Math, MaskUtils,
   MultiMon,
+  {$IFDEF COMPILER16_UP}
+  Vcl.Themes,
+  {$ENDIF COMPILER16_UP}
   JclFileUtils, JclStrings,
   JvPickDate, JvJCLUtils, JvJVCLUtils,
   JvThemes, JvResources, JclSysUtils;
@@ -1377,6 +1392,10 @@ const
   AlignStyle: array [Boolean, TAlignment] of DWORD =
     ((WS_EX_LEFT, WS_EX_RIGHT, WS_EX_LEFT),
     (WS_EX_RIGHT, WS_EX_LEFT, WS_EX_LEFT));
+  {$IFDEF COMPILER16_UP}
+  ColorStates: array[Boolean] of TStyleColor = (scEditDisabled, scEdit);
+  FontColorStates: array[Boolean] of TStyleFont = (sfEditBoxTextDisabled, sfEditBoxTextNormal);
+  {$ENDIF COMPILER16_UP}
 var
   LTextWidth, X: Integer;
   EditRect: TRect;
@@ -1392,16 +1411,14 @@ begin
     ChangeBiDiModeAlignment(AAlignment);
   if StandardPaint and not (csPaintCopy in TEd(Editor).ControlState) then
   begin
-    if SysLocale.MiddleEast and TEd(Editor).HandleAllocated and (TEd(Editor).IsRightToLeft) then
+    if SysLocale.MiddleEast and TEd(Editor).HandleAllocated and TEd(Editor).IsRightToLeft then
     begin { This keeps the right aligned text, right aligned }
-      ExStyle := DWORD(GetWindowLong(TEd(Editor).Handle, GWL_EXSTYLE)) and (not WS_EX_RIGHT) and
-        (not WS_EX_RTLREADING) and (not WS_EX_LEFTSCROLLBAR);
+      ExStyle := DWORD(GetWindowLong(TEd(Editor).Handle, GWL_EXSTYLE)) and not (WS_EX_RIGHT or WS_EX_RTLREADING or WS_EX_LEFTSCROLLBAR);
       if TEd(Editor).UseRightToLeftReading then
         ExStyle := ExStyle or WS_EX_RTLREADING;
       if TEd(Editor).UseRightToLeftScrollBar then
         ExStyle := ExStyle or WS_EX_LEFTSCROLLBAR;
-      ExStyle := ExStyle or
-        AlignStyle[TEd(Editor).UseRightToLeftAlignment, AAlignment];
+      ExStyle := ExStyle or AlignStyle[TEd(Editor).UseRightToLeftAlignment, AAlignment];
       if DWORD(GetWindowLong(TEd(Editor).Handle, GWL_EXSTYLE)) <> ExStyle then
         SetWindowLong(TEd(Editor).Handle, GWL_EXSTYLE, ExStyle);
     end;
@@ -1456,6 +1473,14 @@ begin
         SaveDC(ACanvas.Handle);
         try
           ACanvas.Brush.Style := bsClear;
+          {$IFDEF COMPILER16_UP}
+          if StyleServices.Enabled and not StyleServices.IsSystemStyle then
+          begin
+            ACanvas.Brush.Color := StyleServices.GetStyleColor(ColorStates[Editor.Enabled]);
+            ACanvas.Font.Color := StyleServices.GetStyleFontColor(FontColorStates[Editor.Enabled]);
+          end
+          else
+          {$ENDIF COMPILER16_UP}
           ACanvas.Font.Color := DisabledTextColor;
           ACanvas.TextRect(EditRect, X, EditRect.Top, S);
         finally
@@ -1464,6 +1489,14 @@ begin
       end
       else
       begin
+        {$IFDEF COMPILER16_UP}
+        if StyleServices.Enabled and not StyleServices.IsSystemStyle then
+        begin
+          ACanvas.Brush.Color := StyleServices.GetStyleColor(ColorStates[Editor.Enabled]);
+          ACanvas.Font.Color := StyleServices.GetStyleFontColor(FontColorStates[Editor.Enabled]);
+        end
+        else
+        {$ENDIF COMPILER16_UP}
         Brush.Color := TEd(Editor).Color;
         ACanvas.TextRect(EditRect, X, EditRect.Top, S);
       end;
@@ -2076,10 +2109,20 @@ begin
     Result := inherited DoEraseBackground(Canvas, Param)
   else
   begin
+    {$IFDEF COMPILER16_UP}
+    if StyleServices.Enabled and not StyleServices.IsSystemStyle then
+    begin
+      // Ignore FDisabldColor. The Style dictates the color
+      Result := inherited DoEraseBackground(Canvas, Param);
+    end
+    else
+    {$ENDIF COMPILER16_UP}
+    begin
     Canvas.Brush.Color := FDisabledColor;
     Canvas.Brush.Style := bsSolid;
     Canvas.FillRect(ClientRect);
   end;
+end;
 end;
 
 procedure TJvCustomComboEdit.FocusSet(PrevWnd: THandle);
@@ -2326,7 +2369,11 @@ begin
     else
     begin
       { must catch and remove this, since is actually multi-line }
-      GetParentForm(Self).Perform(CM_DIALOGKEY, Byte(Key), 0);
+      if (Form <> nil) and (Form.Perform(CM_DIALOGKEY, Byte(Key), 0) <> 0) then
+      begin
+        Key := #0;
+        Exit;
+      end;
       if Key = Cr then
       begin
         inherited KeyPress(Key);
@@ -2948,11 +2995,11 @@ begin
     if BorderStyle = bsSingle then
     begin
       if Ctl3D then
-        BtnRect := Bounds(Width - FButton.Width - 2, 0,
-          FButton.Width, Height - 2)
+        BtnRect := Bounds(Width - FButton.Width - 2 - 1, 0 + 1,
+          FButton.Width, Height - 2 - 2)
       else
-        BtnRect := Bounds(Width - FButton.Width - 1, 1,
-          FButton.Width, Height - 2);
+        BtnRect := Bounds(Width - FButton.Width - 1 - 1, 1 + 1,
+          FButton.Width, Height - 2 - 2);
     end
     else
       BtnRect := Bounds(Width - FButton.Width, 0,
@@ -2964,7 +3011,7 @@ begin
     if BorderStyle = bsSingle then
     begin
       if not Flat then
-        BtnRect := Bounds(Width - FButton.Width - 4, 0,
+        BtnRect := Bounds(Width - FButton.Width - 4 + 1, 0 + 1,
           FButton.Width, Height - 4)
       else
         BtnRect := Bounds(Width - FButton.Width - 2, 2,
@@ -3356,6 +3403,11 @@ begin
   inherited Destroy;
 end;
 
+function TJvCustomDateEdit.DisplayNullDateAsEmptyText: Boolean;
+begin
+  Result := not ShowNullDate;
+end;
+
 function TJvCustomDateEdit.CreateDataConnector: TJvCustomComboEditDataConnector;
 begin
   Result := TJvCustomDateEditDataConnector.Create(Self);
@@ -3699,7 +3751,7 @@ begin
   D := Self.Date;
   SavedModified := Modified;
   TestDateBetween(Value);
-  if Value = NullDate then
+  if (Value = NullDate) and DisplayNullDateAsEmptyText then
     Text := ''
   else
     Text := FormatDateTime(FDateFormat, Value);
@@ -3778,6 +3830,15 @@ end;
 procedure TJvCustomDateEdit.SetPopupValue(const Value: Variant);
 begin
   inherited SetPopupValue(StrToDateFmtDef(FDateFormat, VarToStr(Value), SysUtils.Date));
+end;
+
+procedure TJvCustomDateEdit.SetShowNullDate(const Value: Boolean);
+begin
+  if FShowNullDate <> Value then
+  begin
+    FShowNullDate := Value;
+    SetDate(Date);
+  end;
 end;
 
 procedure TJvCustomDateEdit.SetStartOfWeek(Value: TDayOfWeekName);
@@ -4382,6 +4443,8 @@ begin
   OEMConvert := True;
   {$ENDIF ~UNICODE}
   FAcceptFiles := True;
+  AlwaysEnableButton := True;
+  AlwaysShowPopup := True;
   FAutoCompleteOptions := [acoAutoSuggest];
   ControlState := ControlState + [csCreating];
   try

@@ -954,7 +954,7 @@ uses
   SysUtils, Forms, Dialogs, Printers, Clipbrd,
   Math, // uses Ceil routine, also defines IsNaN on Delphi 6 and up.
   JvJCLUtils, // StrToFloatDef
-  JvJVCLUtils, JvConsts, JvResources;
+  JvJVCLUtils, JvResources;
 
 const
   {$IFDEF TJVCHART_ARRAY_OF_ARRAY}
@@ -1521,6 +1521,7 @@ begin
     for N := OldLen to Idx do
       FData[N] := FClearToValue;
   end;
+  FDataAlloc := Length(FData);
 end;
 {$ENDIF TJVCHART_ARRAY_OF_ARRAY}
 

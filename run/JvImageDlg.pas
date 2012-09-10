@@ -33,16 +33,15 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  SysUtils, Classes,
+  Windows, SysUtils, Classes,
   Graphics, Controls, Forms, ExtCtrls,
-  jpeg,
-  JvBaseDlg, JvComponent, JvTypes;
+  JvBaseDlg, JvComponent;
 
 type
   {$IFDEF RTL230_UP}
   [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
   {$ENDIF RTL230_UP}
-  TJvImageDialog = class(TJvCommonDialogP)
+  TJvImageDialog = class(TJvCommonDialog)
   private
     FPicture: TPicture;
     FTitle: string;
@@ -54,7 +53,7 @@ type
   published
     property Picture: TPicture read GetPicture write SetPicture;
     property Title: string read FTitle write FTitle;
-    function Execute: Boolean; override;
+    function Execute(ParentWnd: HWND): Boolean; overload; override;
   end;
 
 {$IFDEF UNITVERSIONING}
@@ -70,7 +69,35 @@ const
 implementation
 
 uses
-  JvConsts, JvResources, JvExForms;
+  JvResources;
+
+type
+  TJvImageDlgForm = class(TJvForm)
+  private
+    FParentWnd: HWND;
+  protected
+    procedure CreateParams(var Params: TCreateParams); override;
+  public
+    constructor Create(AOwner: TComponent; AParentWnd: HWND); reintroduce;
+  end;
+
+//=== { TJvImageDlgForm } ====================================================
+
+constructor TJvImageDlgForm.Create(AOwner: TComponent; AParentWnd: HWND);
+begin
+  FParentWnd := AParentWnd;
+  CreateNew(AOwner, 0);
+end;
+
+procedure TJvImageDlgForm.CreateParams(var Params: TCreateParams);
+begin
+  inherited CreateParams(Params);
+  if FParentWnd <> 0 then
+    Params.WndParent := FParentWnd;
+end;
+
+
+//=== { TJvImageDialog } ====================================================
 
 constructor TJvImageDialog.Create(AOwner: TComponent);
 begin
@@ -85,15 +112,15 @@ begin
   inherited Destroy;
 end;
 
-function TJvImageDialog.Execute: Boolean;
+function TJvImageDialog.Execute(ParentWnd: HWND): Boolean;
 var
-  Form: TJvForm;
+  Form: TJvImageDlgForm;
   Image1: TImage;
 begin
   Result := False;
   if (Picture.Height <> 0) and (Picture.Width <> 0) then
   begin
-    Form := TJvForm.CreateNew(Self);
+    Form := TJvImageDlgForm.Create(Self, ParentWnd);
     try
       Form.BorderStyle := bsDialog;
       Form.BorderIcons := [biSystemMenu];

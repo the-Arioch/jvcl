@@ -37,9 +37,9 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  SysUtils, Classes, Consts,
+  SysUtils, Classes,
   Windows, Messages, Controls, Forms, Graphics,
-  JvConsts, JvResources;
+  JvResources;
 
 const
   MaxPixelCount = 32767;
@@ -76,7 +76,7 @@ type
     Msg: Cardinal;
     Index: Integer;
     {$IFDEF COMPILER16_UP}
-	WParamFiller: TDWordFiller;
+    WParamFiller: TDWordFiller;
     {$ENDIF COMPILER16_UP}
     Control: TControl;
     Result: LRESULT;

@@ -48,7 +48,10 @@ uses
   {$ENDIF UNITVERSIONING}
   CommCtrl, Types, SysUtils, Classes, Windows, Messages,
   Controls, Graphics, Forms, ExtCtrls, Buttons, Menus, ImgList, ActnList,
-  JvExControls, JvComponent, JvButton, JvConsts, JvTypes, JvHotTrackPersistent,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF HAS_UNIT_SYSTEM_UITYPES}
+  JvExControls, JvComponent, JvConsts, JvTypes, JvHotTrackPersistent,
   JvThemes;
 
 type
@@ -313,6 +316,7 @@ type
   TJvSpeedButton = class(TJvCustomSpeedButton)
   private
     FHotTrackGlyph: TJvxButtonGlyph;
+    FGlyphFromAction: Boolean;
     function GetGlyph: TBitmap;
     function GetHotTrackGlyph: TBitmap;
     function GetNumGlyphs: TJvNumGlyphs;
@@ -321,6 +325,7 @@ type
     procedure SetGlyph(Value: TBitmap);
     procedure SetHotTrackGlyph(const Value: TBitmap);
     procedure SetNumGlyphs(Value: TJvNumGlyphs);
+    function IsGlyphStored: Boolean;
   protected
     procedure ActionChange(Sender: TObject; CheckDefaults: Boolean); override;
 
@@ -356,7 +361,7 @@ type
     property Enabled;
     property Flat;
     property Font;
-    property Glyph: TBitmap read GetGlyph write SetGlyph;
+    property Glyph: TBitmap read GetGlyph write SetGlyph stored IsGlyphStored;
     property GrayedInactive;
     property GrayNewStyle;
     property HintColor;
@@ -1223,7 +1228,7 @@ begin
   PaintRect := Rect(0, 0, Width, Height);
 
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
+  if ThemeServices.Enabled then
   begin
     if ControlInGlassPaint(Self) then
       FillRect(Canvas.Handle, ClientRect, GetStockObject(BLACK_BRUSH))
@@ -1956,6 +1961,7 @@ procedure TJvSpeedButton.ActionChange(Sender: TObject; CheckDefaults: Boolean);
       Canvas.FillRect(Rect(0, 0, Width, Height));
       ImageList.Draw(Canvas, 0, 0, Index);
       TransparentColor := clFuchsia;
+      FGlyphFromAction := True;
     end;
   end;
 
@@ -1967,7 +1973,7 @@ begin
       if CheckDefaults or (Self.GroupIndex = 0) then
         Self.GroupIndex := GroupIndex;
       { Copy image from action's imagelist }
-      if (Glyph.Empty) and (ActionList <> nil) and (ActionList.Images <> nil) and
+      if (FGlyphFromAction or (Glyph.Empty)) and (ActionList <> nil) and (ActionList.Images <> nil) and
         (ImageIndex >= 0) and (ImageIndex < ActionList.Images.Count) then
         CopyImage(TCustomImageList(ActionList.Images), ImageIndex);
     end;
@@ -2022,6 +2028,11 @@ begin
   Invalidate;
 end;
 
+function TJvSpeedButton.IsGlyphStored: Boolean;
+begin
+  Result := not FGlyphFromAction;
+end;
+
 procedure TJvSpeedButton.PaintImage(Canvas: TCanvas; ARect: TRect; const Offset: TPoint;
   AState: TJvButtonState; DrawMark, PaintOnGlass: Boolean);
 begin
@@ -2041,6 +2052,7 @@ end;
 procedure TJvSpeedButton.SetGlyph(Value: TBitmap);
 begin
   FGlyph.Glyph := Value;
+  FGlyphFromAction := False;
   Invalidate;
 end;
 

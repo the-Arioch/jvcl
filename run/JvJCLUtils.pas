@@ -45,6 +45,10 @@ uses
   {$IFDEF MSWINDOWS}
   Windows, Messages, ShlObj, ActiveX,
   {$ENDIF MSWINDOWS}
+  Types,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF}
   Variants, SysUtils, Classes, Contnrs, Graphics, Clipbrd, Controls,
   StrUtils, TypInfo,
   JclBase,
@@ -65,19 +69,40 @@ const
   NullHandle = 0;
   USDecimalSeparator = '.';
 
+{$IFNDEF COMPILER12_UP} // Delphi 2009 introduced it and fixed the NativeInt of Delphi 2007
+type
+  // Compatibility for older Delphi versions, so the JVCL doesn't need to IFDEFs every call to
+  // SetWindowLongPtr/GetWindowLongPtr.
+  NativeInt = Integer;
+
+  {$EXTERNALSYM INT_PTR}
+  INT_PTR = Integer;
+  {$EXTERNALSYM LONG_PTR}
+  LONG_PTR = Longint;
+  {$EXTERNALSYM UINT_PTR}
+  UINT_PTR = Cardinal;
+  {$EXTERNALSYM ULONG_PTR}
+  ULONG_PTR = LongWord;
+  {$EXTERNALSYM DWORD_PTR}
+  DWORD_PTR = ULONG_PTR;
+
+{$EXTERNALSYM GetWindowLongPtr}
+function GetWindowLongPtr(hWnd: HWND; nIndex: Integer): LONG_PTR; stdcall;
+{$EXTERNALSYM SetWindowLongPtr}
+function SetWindowLongPtr(hWnd: HWND; nIndex: Integer; dwNewLong: LONG_PTR): LONG_PTR; stdcall;
+{$ENDIF ~COMPILER12_UP}
+
 type
   EJvConvertError = Class(EConvertError);  { subclass EConvertError raised by some non-Def versions of floating point conversion routine }
   {$IFDEF UNIX}
   TFileTime = Integer;
   {$ENDIF UNIX}
-  
+
   {$IFNDEF RTL150_UP}
   TFormatSettings = record
     DecimalSeparator: Char;
   end;
   {$ENDIF RTL150_UP}
-
-
 
 function SendRectMessage(Handle: THandle; Msg: Integer; wParam: WPARAM; var R: TRect): Integer;
 function SendStructMessage(Handle: THandle; Msg: Integer; wParam: WPARAM; var Data): Integer;
@@ -202,6 +227,9 @@ function HasChar(const Ch: Char; const S: string): Boolean;
 function HasCharW(const Ch: WideChar; const S: WideString): Boolean; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF SUPPORTS_INLINE}
 function HasAnyChar(const Chars: string; const S: string): Boolean;
 {$IFNDEF COMPILER12_UP}
+function ToUpper(C: Char): Char; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF SUPPORTS_INLINE}
+{$ENDIF ~COMPILER12_UP}
+{$IFNDEF COMPILER12_UP}
 function CharInSet(const Ch: AnsiChar; const SetOfChar: TSysCharSet): Boolean; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF SUPPORTS_INLINE}
 {$ENDIF ~COMPILER12_UP}
 function CharInSetW(const Ch: WideChar; const SetOfChar: TSysCharSet): Boolean; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF SUPPORTS_INLINE}
@@ -302,7 +330,6 @@ function PrettyNameToColor(const Value: string): TColor;
 {**** other routines }
 procedure SwapInt(var Int1, Int2: Integer); {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF SUPPORTS_INLINE}
 function IntPower(Base, Exponent: Integer): Integer;
-function ChangeTopException(E: TObject): TObject; // Linux version writes error message to ErrOutput
 function StrToBool(const S: string): Boolean;
 
 function Var2Type(V: Variant; const DestVarType: Integer): Variant;
@@ -469,9 +496,9 @@ function ExtractDay(ADate: TDateTime): Word;
 function ExtractMonth(ADate: TDateTime): Word;
 function ExtractYear(ADate: TDateTime): Word;
 function IncDate(ADate: TDateTime; Days, Months, Years: Integer): TDateTime;
-function IncDay(ADate: TDateTime; Delta: Integer): TDateTime; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF SUPPORTS_INLINE}
-function IncMonth(ADate: TDateTime; Delta: Integer): TDateTime;
-function IncYear(ADate: TDateTime; Delta: Integer): TDateTime;
+function IncDay(ADate: TDateTime; Delta: Integer = 1): TDateTime; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF SUPPORTS_INLINE}
+function IncMonth(ADate: TDateTime; Delta: Integer = 1): TDateTime;
+function IncYear(ADate: TDateTime; Delta: Integer = 1): TDateTime;
 function ValidDate(ADate: TDateTime): Boolean;
 procedure DateDiff(Date1, Date2: TDateTime; var Days, Months, Years: Word);
 function MonthsBetween(Date1, Date2: TDateTime): Double;
@@ -617,7 +644,11 @@ function IsWild(InputStr, Wilds: string; IgnoreCase: Boolean): Boolean;
   if corresponds. }
 function XorString(const Key, Src: ShortString): ShortString;
 function XorEncode(const Key, Source: string): string;
+  {$IFDEF SUPPORTS_DEPRECATED}deprecated{$IFDEF SUPPORTS_DEPRECATED_DETAILS} 'use XorEncodeString that has support for non-ASCII chars'{$ENDIF};{$ENDIF}
 function XorDecode(const Key, Source: string): string;
+  {$IFDEF SUPPORTS_DEPRECATED}deprecated{$IFDEF SUPPORTS_DEPRECATED_DETAILS} 'use XorEncodeString that has support for non-ASCII chars'{$ENDIF};{$ENDIF}
+function XorEncodeString(const Key, Source: string): string;
+function XorDecodeString(const Key, Source: string): string;
 
 { ** Command line routines ** }
 
@@ -666,8 +697,6 @@ function AnsiDequotedStr(const S: string; AQuote: Char): string; // follow Delph
 function GetTempFileName(const Prefix: AnsiString): AnsiString;
 {$ENDIF UNIX}
 
-{ begin JvFileUtil }
-function FileDateTime(const FileName: string): TDateTime;
 function HasAttr(const FileName: string; Attr: Integer): Boolean;
 function DeleteFilesEx(const FileMasks: array of string): Boolean;
 function NormalDir(const DirName: string): string;
@@ -902,7 +931,7 @@ function RectSquare(var ARect: TRect; AMaxSize: Integer = -1): Boolean;
 
 {$IFDEF MSWINDOWS}
 procedure FreeUnusedOle;
-function GetWindowsVersion: string;
+function GetWindowsVersionString: string;
 function LoadDLL(const LibName: string): THandle;
 function RegisterServer(const ModuleName: string): Boolean;
 function UnregisterServer(const ModuleName: string): Boolean;
@@ -915,25 +944,6 @@ function StringToPChar(var S: string): PChar;
 function StrPAlloc(const S: string): PChar;
 procedure SplitCommandLine(const CmdLine: string; var ExeName, Params: string);
 function DropT(const S: string): string;
-
-{ Memory routines }
-
-function AllocMemo(Size: Longint): Pointer;
-function ReallocMemo(fpBlock: Pointer; Size: Longint): Pointer;
-procedure FreeMemo(var fpBlock: Pointer);
-function GetMemoSize(fpBlock: Pointer): Longint;
-{$IFDEF CPU32}
-{$MESSAGE HINT 'Is this CompareMem function at all necessary?'}
-function CompareMem(fpBlock1, fpBlock2: Pointer; Size: Cardinal): Boolean;
-{$ENDIF CPU32}
-
-{ Manipulate huge pointers routines }
-
-procedure HugeInc(var HugePtr: Pointer; Amount: Longint);
-procedure HugeDec(var HugePtr: Pointer; Amount: Longint);
-function HugeOffset(HugePtr: Pointer; Amount: Longint): Pointer;
-procedure HugeMove(Base: Pointer; Dst, Src, Size: Longint);
-procedure HMemCpy(DstPtr, SrcPtr: Pointer; Amount: Longint);
 
 function WindowClassName(Wnd: THandle): string;
 
@@ -1095,9 +1105,9 @@ uses
   {$IFDEF MSWINDOWS}
   ComObj, ShellAPI, MMSystem, Registry,
   {$ENDIF MSWINDOWS}
-  {$IFDEF UNICODE}
+  {$IFDEF HAS_UNIT_CHARACTER}
   Character, // needed for JclStrings inlined functions
-  {$ENDIF UNICODE}
+  {$ENDIF HAS_UNIT_CHARACTER}
   Consts,
   JclStrings, JclSysInfo, JclFileUtils,
   Math, JclSysUtils;
@@ -1111,14 +1121,27 @@ const
   RC_ShellName = 'Shell_TrayWnd';
   RC_DefaultIcon = 'DefaultIcon';
   {$ENDIF MSWINDOWS}
+  tkStrings: set of TTypeKind = [tkString, tkLString, {$IFDEF UNICODE} tkUString, {$ENDIF} tkWString];
 
 resourcestring
   // (p3) duplicated from JvConsts since this unit should not rely on JVCL at all
   RsEPropertyNotExists = 'Property "%s" does not exist';
   RsEInvalidPropertyType = 'Property "%s" has invalid type';
   RsEPivotLessThanZero = 'JvJCLUtils.MakeYear4Digit: Pivot < 0';
-const
-  tkStrings: set of TTypeKind = [tkString, tkLString, {$IFDEF UNICODE} tkUString, {$ENDIF} tkWString];
+
+{$IFNDEF COMPILER12_UP} // Delphi 2009 introduced it and fixed the NativeInt of Delphi 2007
+function GetWindowLongPtr(hWnd: HWND; nIndex: Integer): LONG_PTR; stdcall;
+asm
+  pop ebp
+  jmp GetWindowLong
+end;
+
+function SetWindowLongPtr(hWnd: HWND; nIndex: Integer; dwNewLong: LONG_PTR): LONG_PTR; stdcall;
+asm
+  pop ebp
+  jmp SetWindowLong
+end;
+{$ENDIF ~COMPILER12_UP}
 
 function SendRectMessage(Handle: THandle; Msg: Integer; wParam: WPARAM; var R: TRect): Integer;
 begin
@@ -2384,6 +2407,15 @@ begin
 end;
 
 {$IFNDEF COMPILER12_UP}
+function ToUpper(C: Char): Char;
+var s : string;
+begin
+  s := UpperCase(c);
+  Result := s[1];
+end;
+{$ENDIF ~COMPILER12_UP}
+
+{$IFNDEF COMPILER12_UP}
 function CharInSet(const Ch: AnsiChar; const SetOfChar: TSysCharSet): Boolean;
 begin
   Result := Ch in SetOfChar;
@@ -2415,47 +2447,6 @@ begin
     Result := 0
   else
     Result := 1;
-end;
-
-function ChangeTopException(E: TObject): TObject;
-type
-  PRaiseFrame = ^TRaiseFrame;
-  TRaiseFrame = record
-    NextRaise: PRaiseFrame;
-    ExceptAddr: Pointer;
-    ExceptObject: TObject;
-    //ExceptionRecord: PExceptionRecord;
-  end;
-begin
-  {$IFDEF DELPHI64_TEMPORARY}
-  System.Error(rePlatformNotImplemented);
-  Result := E;
-  {$ELSE ~DELPHI64_TEMPORARY}
-  { C++ Builder 3 Warning !}
-  { if linker error occured with message "unresolved external 'System::RaiseList'" try
-    comment this function implementation, compile,
-    then uncomment and compile again. }
-  {$IFDEF MSWINDOWS}
-  {$IFDEF SUPPORTS_DEPRECATED}
-  {$WARN SYMBOL_DEPRECATED OFF}
-  {$ENDIF SUPPORTS_DEPRECATED}
-  if RaiseList <> nil then
-  begin
-    Result := PRaiseFrame(RaiseList)^.ExceptObject;
-    PRaiseFrame(RaiseList)^.ExceptObject := E
-  end
-  else
-    Result := nil;
-  {$IFDEF SUPPORTS_DEPRECATED}
-  {$WARN SYMBOL_DEPRECATED ON}
-  {$ENDIF SUPPORTS_DEPRECATED}
-  {$ENDIF MSWINDOWS}
-  {$IFDEF UNIX}
-  // XXX: changing exception in stack frame is not supported on Kylix
-  Writeln(ErrOutput, 'ChangeTopException');
-  Result := E;
-  {$ENDIF UNIX}
-  {$ENDIF ~DELPHI64_TEMPORARY}
 end;
 
 function KeyPressed(VK: Integer): Boolean;
@@ -4089,9 +4080,7 @@ var
   B: Byte;
 begin
   InStream.Position := 0;
-  Count := 1024;
-  while Count = 1024 do
-  begin
+  repeat
     Count := InStream.Read(Buf1, 1024);
     Count2 := 0;
     I := 0;
@@ -4131,7 +4120,7 @@ begin
       end;
     end;
     OutStream.Write(Buf2, Count2);
-  end;
+  until Count <> 1024;
 end;
 
 procedure RleDecompressTo(InStream, OutStream: TStream);
@@ -4142,9 +4131,7 @@ var
   B: Byte;
 begin
   InStream.Position := 0;
-  Count := 1024;
-  while Count = 1024 do
-  begin
+  repeat
     Count := InStream.Read(Buf1, 1024);
     Count2 := 0;
     I := 0;
@@ -4171,7 +4158,7 @@ begin
       Inc(I);
     end;
     OutStream.Write(Buf2, Count2);
-  end;
+  until Count <> 1024;
 end;
 
 procedure RleCompress(Stream: TStream);
@@ -5765,14 +5752,15 @@ end;
 
 function XorEncode(const Key, Source: string): string;
 var
-  I: Integer;
+  I, KeyLen: Integer;
   C: Byte;
 begin
   Result := '';
+  KeyLen := Length(Key);
   for I := 1 to Length(Source) do
   begin
-    if Length(Key) > 0 then
-      C := Byte(Key[1 + ((I - 1) mod Length(Key))]) xor Byte(Source[I])
+    if KeyLen > 0 then
+      C := Byte(Key[1 + ((I - 1) mod KeyLen)]) xor Byte(Source[I])
     else
       C := Byte(Source[I]);
     Result := Result + AnsiLowerCase(IntToHex(C, 2));
@@ -5781,17 +5769,81 @@ end;
 
 function XorDecode(const Key, Source: string): string;
 var
-  I: Integer;
+  I, KeyLen: Integer;
   C: Char;
 begin
   Result := '';
+  KeyLen := Length(Key);
   for I := 0 to Length(Source) div 2 - 1 do
   begin
     C := Char(StrToIntDef('$' + string(Source[I * 2 + 1] + Source[I * 2 + 2]), Ord(' ')));
-    if Length(Key) > 0 then
-      C := Char(Byte(Key[1 + (I mod Length(Key))]) xor Byte(C));
+    if KeyLen > 0 then
+      C := Char(Byte(Key[1 + (I mod KeyLen)]) xor Byte(C));
     Result := Result + C;
   end;
+end;
+
+function XorEncodeString(const Key, Source: string): string;
+const
+  HexChars: array[0..15] of Char =
+    ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f');
+var
+  I, KeyLen: Integer;
+  C: Byte;
+  Utf8Src, Utf8Key: UTF8String;
+begin
+  Result := '';
+  Utf8Src := UTF8Encode(Source);
+  Utf8Key := UTF8Encode(Key);
+  KeyLen := Length(Utf8Key);
+  SetLength(Result, Length(Utf8Src) * 2);
+  for I := 1 to Length(Utf8Src) do
+  begin
+    if KeyLen > 0 then
+      C := Byte(Utf8Src[I]) xor Byte(Utf8Key[1 + ((I - 1) mod KeyLen)])
+    else
+      C := Byte(Utf8Src[I]);
+    Result[1 + (I - 1) * 2] := HexChars[C shr 4];
+    Result[1 + (I - 1) * 2 + 1] := HexChars[C and $0F];
+  end;
+end;
+
+function XorDecodeString(const Key, Source: string): string;
+var
+  I, KeyLen: Integer;
+  C: Char;
+  B: Byte;
+  Utf8Result, Utf8Key: UTF8String;
+begin
+  Result := '';
+  Utf8Key := UTF8Encode(Key);
+  KeyLen := Length(Utf8Key);
+  SetLength(Utf8Result, Length(Source) div 2);
+  for I := 0 to Length(Source) div 2 - 1 do
+  begin
+    // HexToInt
+    C := Source[1 + I * 2];
+    case C of
+      '0'..'9': B := Ord(C) - Ord('0');
+      'A'..'F': B := Ord(C) - 55;
+      'a'..'f': B := Ord(C) - 87;
+    else
+      B := Ord(' ');
+    end;
+    B := B shl 4;
+    C := Source[1 + I * 2 + 1];
+    case C of
+      '0'..'9': B := B or (Ord(C) - Ord('0'));
+      'A'..'F': B := B or (Ord(C) - 55);
+      'a'..'f': B := B or (Ord(C) - 87);
+    else
+      B := Ord(' ');
+    end;
+    if KeyLen > 0 then
+      B := B xor Byte(Utf8Key[1 + (I mod KeyLen)]);
+    Utf8Result[1 + I] := AnsiChar(B);
+  end;
+  Result := UTF8ToString(Utf8Result);
 end;
 
 function GetCmdLineArg(const Switch: string; ASwitchChars: TSysCharSet): string;
@@ -5900,27 +5952,6 @@ begin
     if not ((Length(Result) = 3) and CharInSet(Result[1], ['A'..'Z', 'a'..'z']) and
       (Result[2] = ':')) then
       Delete(Result, Length(Result), 1);
-end;
-
-function FileDateTime(const FileName: string): TDateTime;
-{$IFNDEF COMPILER10_UP}
-var
-  Age: Longint;
-{$ENDIF !COMPILER10_UP}
-begin
-  {$IFDEF COMPILER10_UP}
-  if not FileAge(Filename, Result) then
-    Result := NullDate;
-  {$ELSE}
-  Age := FileAge(FileName);
-  {$IFDEF MSWINDOWS}
-  // [roko] -1 is valid FileAge value on Linux
-  if Age = -1 then
-    Result := NullDate
-  else
-  {$ENDIF MSWINDOWS}
-    Result := FileDateToDateTime(Age);
-  {$ENDIF COMPILER10_UP}
 end;
 
 function HasAttr(const FileName: string; Attr: Integer): Boolean;
@@ -6862,7 +6893,7 @@ begin
   List.BeginUpdate;
   try
     List.Clear;
-    EnumWindows(@EnumWindowsProc, Integer(List));
+    EnumWindows(@EnumWindowsProc, LPARAM(List));
   finally
     List.EndUpdate;
   end;
@@ -7014,8 +7045,8 @@ begin
 
   { Locale Handling logic October 2008 supercedes former StrToFloatUS functionality. }
   {$IFDEF RTL150_UP}
-  LocalFormatSettings.ThousandSeparator := GetLocaleChar(LOCALE_SYSTEM_DEFAULT, LOCALE_STHOUSAND, '.');
-  LocalFormatSettings.DecimalSeparator := GetLocaleChar(LOCALE_SYSTEM_DEFAULT, LOCALE_SDECIMAL, '.');
+  LocalFormatSettings.ThousandSeparator := GetLocaleChar(LOCALE_USER_DEFAULT, LOCALE_STHOUSAND, '.');
+  LocalFormatSettings.DecimalSeparator := GetLocaleChar(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, '.');
   {$ELSE}
   LocalFormatSettings.DecimalSeparator := DecimalSeparator;
   {$ENDIF RTL150_UP}
@@ -7548,15 +7579,10 @@ procedure ResourceNotFound(ResID: PChar);
 var
   S: string;
 begin
-  {$IFDEF DELPHI64_TEMPORARY}
-  if INT_PTR(ResID) <= $FFFF then
+  if DWORD_PTR(ResID) <= $FFFF then
     S := IntToStr(INT_PTR(ResID))
-  {$ELSE ~DELPHI64_TEMPORARY}
-  if LongRec(ResID).Hi = 0 then
-    S := IntToStr(LongRec(ResID).Lo)
-  {$ENDIF ~DELPHI64_TEMPORARY}
   else
-    S := StrPas(ResID);
+    S := ResID;
   raise EResNotFound.CreateResFmt(@SResNotFound, [S]);
 end;
 
@@ -7644,11 +7670,11 @@ end;
 function LoadDLL(const LibName: string): THandle;
 begin
   Result := SafeLoadLibrary(LibName);
-  if Result <> 0 then
+  if Result = 0 then
     OSCheck(False);
 end;
 
-function GetWindowsVersion: string;
+function GetWindowsVersionString: string;
 const
   sWindowsVersion = 'Windows %s %d.%.2d.%.3d %s';
 var
@@ -7738,97 +7764,6 @@ begin
   Result := getenv(PChar(VarName));
 end;
 {$ENDIF UNIX}
-
-{ Memory routines }
-
-function AllocMemo(Size: Longint): Pointer;
-begin
-  if Size > 0 then
-    Result := GlobalAllocPtr(HeapAllocFlags or GMEM_ZEROINIT, Size)
-  else
-    Result := nil;
-end;
-
-function ReallocMemo(fpBlock: Pointer; Size: Longint): Pointer;
-begin
-  Result := GlobalReallocPtr(fpBlock, Size, HeapAllocFlags or GMEM_ZEROINIT);
-end;
-
-procedure FreeMemo(var fpBlock: Pointer);
-begin
-  if fpBlock <> nil then
-  begin
-    GlobalFreePtr(fpBlock);
-    fpBlock := nil;
-  end;
-end;
-
-function GetMemoSize(fpBlock: Pointer): Longint;
-var
-  hMem: THandle;
-begin
-  Result := 0;
-  if fpBlock <> nil then
-  begin
-    hMem := GlobalHandle(fpBlock);
-    if hMem <> 0 then
-      Result := GlobalSize(hMem);
-  end;
-end;
-
-{$IFDEF CPU32}
-function CompareMem(fpBlock1, fpBlock2: Pointer; Size: Cardinal): Boolean; assembler;
-asm
-        PUSH    ESI
-        PUSH    EDI
-        MOV     ESI,fpBlock1
-        MOV     EDI,fpBlock2
-        MOV     ECX,Size
-        MOV     EDX,ECX
-        XOR     EAX,EAX
-        AND     EDX,3
-        SHR     ECX,2
-        REPE    CMPSD
-        JNE     @@2
-        MOV     ECX,EDX
-        REPE    CMPSB
-        JNE     @@2
-@@1:    INC     EAX
-@@2:    POP     EDI
-        POP     ESI
-end;
-{$ENDIF CPU32}
-
-{ Manipulate huge pointers routines by Ray Lischner, The Waite Group, Inc. }
-
-procedure HugeInc(var HugePtr: Pointer; Amount: Longint);
-begin
-  HugePtr := PAnsiChar(HugePtr) + Amount;
-end;
-
-procedure HugeDec(var HugePtr: Pointer; Amount: Longint);
-begin
-  HugePtr := PAnsiChar(HugePtr) - Amount;
-end;
-
-function HugeOffset(HugePtr: Pointer; Amount: Longint): Pointer;
-begin
-  Result := PAnsiChar(HugePtr) + Amount;
-end;
-
-procedure HMemCpy(DstPtr, SrcPtr: Pointer; Amount: Longint);
-begin
-  Move(SrcPtr^, DstPtr^, Amount);
-end;
-
-procedure HugeMove(Base: Pointer; Dst, Src, Size: Longint);
-var
-  SrcPtr, DstPtr: PAnsiChar;
-begin
-  SrcPtr := PAnsiChar(Base) + Src * SizeOf(Pointer);
-  DstPtr := PAnsiChar(Base) + Dst * SizeOf(Pointer);
-  Move(SrcPtr^, DstPtr^, Size * SizeOf(Pointer));
-end;
 
 { String routines }
 
@@ -7941,7 +7876,7 @@ var
   Info: TAnimationInfo;
 begin
   Info.cbSize := SizeOf(Info);
-  Info.iMinAnimate := Integer(Value);
+  Info.iMinAnimate := Ord(Value);
   SystemParametersInfo(SPI_SETANIMATION, Info.cbSize, @Info, 0);
 end;
 
@@ -7973,7 +7908,7 @@ end;
 
 function GetWindowParent(Wnd: THandle): THandle;
 begin
-  Result := GetWindowLong(Wnd, GWL_HWNDPARENT);
+  Result := THandle(GetWindowLongPtr(Wnd, GWL_HWNDPARENT));
 end;
 
 procedure ActivateWindow(Wnd: THandle);
@@ -7986,8 +7921,7 @@ begin
 end;
 
 {$IFDEF BCB}
-function FindPrevInstance(const MainFormClass: ShortString;
-  const ATitle: string): THandle;
+function FindPrevInstance(const MainFormClass: ShortString; const ATitle: string): THandle;
 {$ELSE}
 function FindPrevInstance(const MainFormClass, ATitle: string): THandle;
 {$ENDIF BCB}
@@ -8011,26 +7945,25 @@ begin
   end;
 end;
 
-function WindowsEnum(Handle: THandle; Param: Longint): BOOL; export; stdcall;
+function WindowsEnum(Handle: HWND; var IsDelphi: Boolean): BOOL; stdcall;
 begin
   if WindowClassName(Handle) = 'TAppBuilder' then
   begin
+    IsDelphi := True;
     Result := False;
-    PLongint(Param)^ := 1;
   end
   else
     Result := True;
 end;
 
 {$IFDEF BCB}
-function ActivatePrevInstance(const MainFormClass: ShortString;
-  const ATitle: string): Boolean;
+function ActivatePrevInstance(const MainFormClass: ShortString; const ATitle: string): Boolean;
 {$ELSE}
 function ActivatePrevInstance(const MainFormClass, ATitle: string): Boolean;
 {$ENDIF BCB}
 var
   PrevWnd, PopupWnd, ParentWnd: HWND;
-  IsDelphi: Longint;
+  IsDelphi: Boolean;
 begin
   Result := False;
   PrevWnd := FindPrevInstance(MainFormClass, ATitle);
@@ -8044,10 +7977,9 @@ begin
     end;
     if WindowClassName(PrevWnd) = 'TApplication' then
     begin
-      IsDelphi := 0;
-      EnumThreadWindows(GetWindowTask(PrevWnd), @WindowsEnum,
-        LPARAM(@IsDelphi));
-      if Boolean(IsDelphi) then
+      IsDelphi := False;
+      EnumThreadWindows(GetWindowTask(PrevWnd), @WindowsEnum, LPARAM(@IsDelphi));
+      if IsDelphi then
         Exit;
       if IsIconic(PrevWnd) then
       begin { application is minimized }
@@ -8344,6 +8276,9 @@ begin
   end;
 end;
 
+{$IFDEF DELPHI2007}
+{$WARNINGS OFF}  // D2007 gives a bogus W1035 on the first line that assigns Result.
+{$ENDIF DELPHI2007}
 function TextToValText(const AValue: string): string;
 var
   I, J: Integer;
@@ -8376,6 +8311,7 @@ begin
   if Result = '-' then
     Result := '-0';
 end;
+{$WARNINGS ON}
 
 function DrawText(Canvas: TCanvas; const Text: string; Len: Integer; var R: TRect; WinFlags: Integer): Integer; overload;
 begin

@@ -36,7 +36,7 @@ uses
   Variants, Types, RTLConsts,
   SysUtils, Classes, Windows, Messages, Controls, Forms,
   JvWndProcHook,
-  JvAppStorage, JvComponentBase, JvJVCLUtils, JvTypes, JvConsts;
+  JvAppStorage, JvComponentBase, JvJVCLUtils, JvTypes;
 
 type
   TJvIniLink = class;
@@ -137,6 +137,7 @@ type
     procedure WriteInteger(const Ident: string; AValue: Longint);
     function ReadDateTime(const Ident: string; Default: TDateTime = 0): TDateTime;
     procedure WriteDateTime(const Ident: string; AValue: TDateTime);
+    procedure DeleteValue(const Ident: string);
     procedure EraseSections;
   published
     property Active: Boolean read FActive write FActive default True;
@@ -288,7 +289,6 @@ const
 implementation
 
 uses
-  Consts,
   JclStrings,
   JvJCLUtils, JvPropertyStorage;
 
@@ -752,6 +752,13 @@ begin
     AppStorage.WriteDateTime(AppStorage.ConcatPaths([AppStoragePath, AppStorage.TranslatePropertyName(Self, Ident, False)]), AValue);
 end;
 
+procedure TJvFormPlacement.DeleteValue(const Ident: string);
+begin
+  // RH: added 2011-09-12
+  if Assigned(AppStorage) and (Ident <> '') then
+    AppStorage.DeleteValue(AppStorage.ConcatPaths([AppStoragePath, AppStorage.TranslatePropertyName(Self, Ident, False)]) );
+end;
+
 procedure TJvFormPlacement.EraseSections;
 begin
   AppStorage.DeleteSubTree(AppStoragePath);
@@ -1167,7 +1174,7 @@ begin
   if KeyString <> '' then
   begin
     SaveStrValue := VarToStr(SaveValue);
-    SaveStrValue := XorEncode(KeyString, SaveStrValue);
+    SaveStrValue := XorEncodeString(KeyString, SaveStrValue);
     StoredValues.Storage.WriteString(PathName, SaveStrValue);
   end
   else
@@ -1196,9 +1203,9 @@ begin
   if KeyString <> '' then
   begin
     DefaultStrValue := VarToStr(Value);
-    DefaultStrValue := XorEncode(KeyString, DefaultStrValue);
+    DefaultStrValue := XorEncodeString(KeyString, DefaultStrValue);
     RestoreStrValue := StoredValues.Storage.ReadString(PathName, DefaultStrValue);
-    RestoreStrValue := XorDecode(KeyString, RestoreStrValue);
+    RestoreStrValue := XorDecodeString(KeyString, RestoreStrValue);
     RestoreValue := RestoreStrValue;
   end
   else

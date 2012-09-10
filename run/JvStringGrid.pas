@@ -40,7 +40,7 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, Grids, StdCtrls,
-  JvTypes, JvJCLUtils, JvExGrids;
+  JvJCLUtils, JvExGrids;
 
 const
   GM_ACTIVATECELL = WM_USER + 123;
@@ -142,6 +142,7 @@ type
     procedure InvalidateRow(ARow: Integer);
     procedure MoveColumn(FromIndex, ToIndex: Integer);
     procedure MoveRow(FromIndex, ToIndex: Longint);
+    property GridState;
     property InplaceEditor;
 
     // Calculates and sets the width of a specific column or all columns if Index < 0

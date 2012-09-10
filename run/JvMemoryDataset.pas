@@ -94,11 +94,21 @@ type
   TSaveLoadState = (slsNone, slsLoading, slsSaving);
   TCompareRecords = function(Item1, Item2: TJvMemoryRecord): Integer of object;
   TWordArray = array of Word;
+  {$IFDEF RTL240_UP}
+  PJvMemBuffer = PByte;
+  TJvBookmark = TBookmark;
+  TJvValueBuffer = TValueBuffer;
+  TJvRecordBuffer = TRecordBuffer;
+  {$ELSE}
   {$IFDEF UNICODE}
   PJvMemBuffer = PByte;
   {$ELSE}
   PJvMemBuffer = PAnsiChar;
   {$ENDIF UNICODE}
+  TJvBookmark = Pointer;
+  TJvValueBuffer = Pointer;
+  TJvRecordBuffer = Pointer;
+  {$ENDIF RTL240_UP}
 
   {$IFDEF RTL230_UP}
   [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
@@ -144,6 +154,7 @@ type
     FCopyFromDataSetFieldDefs: array of Integer; // only valid while CopyFromDataSet is executed
     FClearing: Boolean;
     FUseDataSetFilter: Boolean;
+    FTrimEmptyString: Boolean;
     function AddRecord: TJvMemoryRecord;
     function InsertRecord(Index: Integer): TJvMemoryRecord;
     function FindRecordID(ID: Integer): TJvMemoryRecord;
@@ -195,19 +206,19 @@ type
     function GetRecordSize: Word; override;
     procedure SetFiltered(Value: Boolean); override;
     procedure SetOnFilterRecord(const Value: TFilterRecordEvent); override;
-    procedure SetFieldData(Field: TField; Buffer: Pointer); override;
+    procedure SetFieldData(Field: TField; Buffer: TJvValueBuffer); override;
     procedure CloseBlob(Field: TField); override;
-    procedure GetBookmarkData(Buffer: PJvMemBuffer; Data: Pointer); override;
+    procedure GetBookmarkData(Buffer: PJvMemBuffer; Data: TJvBookmark); override;
     function GetBookmarkFlag(Buffer: PJvMemBuffer): TBookmarkFlag; override;
-    procedure InternalGotoBookmark(Bookmark: Pointer); override;
+    procedure InternalGotoBookmark(Bookmark: TJvBookmark); override;
     procedure InternalSetToRecord(Buffer: PJvMemBuffer); override;
     procedure SetBookmarkFlag(Buffer: PJvMemBuffer; Value: TBookmarkFlag); override;
-    procedure SetBookmarkData(Buffer: PJvMemBuffer; Data: Pointer); override;
+    procedure SetBookmarkData(Buffer: PJvMemBuffer; Data: TJvBookmark); override;
     function GetIsIndexField(Field: TField): Boolean; override;
     procedure InternalFirst; override;
     procedure InternalLast; override;
     procedure InitRecord(Buffer: PJvMemBuffer); override;
-    procedure InternalAddRecord(Buffer: Pointer; Append: Boolean); override;
+    procedure InternalAddRecord(Buffer: TJvRecordBuffer; Append: Boolean); override;
     procedure InternalDelete; override;
     procedure InternalPost; override;
     procedure InternalClose; override;
@@ -230,7 +241,7 @@ type
     function BookmarkValid(Bookmark: TBookmark): Boolean; override;
     function CompareBookmarks(Bookmark1, Bookmark2: TBookmark): Integer; override;
     function CreateBlobStream(Field: TField; Mode: TBlobStreamMode): TStream; override;
-    function GetFieldData(Field: TField; Buffer: Pointer): Boolean; override;
+    function GetFieldData(Field: TField; Buffer: TJvValueBuffer): Boolean; override;
     function GetCurrentRecord(Buffer: PJvMemBuffer): Boolean; override;
     function IsSequenced: Boolean; override;
     function Locate(const KeyFields: string; const KeyValues: Variant;
@@ -239,6 +250,7 @@ type
       const ResultFields: string): Variant; override;
     procedure SortOnFields(const FieldNames: string = '';
       CaseInsensitive: Boolean = True; Descending: Boolean = False);
+    procedure SwapRecords(Idx1: integer; Idx2: integer);
     procedure EmptyTable;
     procedure CopyStructure(Source: TDataSet; UseAutoIncAsInteger: Boolean = False);
     function LoadFromDataSet(Source: TDataSet; RecordCount: Integer;
@@ -276,6 +288,7 @@ type
     property ExactApply: Boolean read FExactApply write FExactApply default False;
     property AutoIncAsInteger: Boolean read FAutoIncAsInteger write FAutoIncAsInteger default False;
     property OneValueInArray: Boolean read FOneValueInArray write FOneValueInArray default True;
+    property TrimEmptyString: Boolean read FTrimEmptyString write FTrimEmptyString default True;
     property BeforeOpen;
     property AfterOpen;
     property BeforeClose;
@@ -358,7 +371,10 @@ const
 implementation
 
 uses
-  DBConsts, Math,
+  Types, DBConsts, Math,
+  {$IFDEF RTL240_UP}
+  System.Generics.Collections,
+  {$ENDIF RTL240_UP}
   {$IFDEF HAS_UNIT_ANSISTRINGS}
   AnsiStrings,
   {$ENDIF HAS_UNIT_ANSISTRINGS}
@@ -510,13 +526,10 @@ procedure CalcDataSize(FieldDef: TFieldDef; var DataSize: Integer);
 var
   I: Integer;
 begin
-  with FieldDef do
-  begin
-    if DataType in ftSupported - ftBlobTypes then
-      Inc(DataSize, CalcFieldLen(DataType, Size) + 1);
-    for I := 0 to ChildDefs.Count - 1 do
-      CalcDataSize(ChildDefs[I], DataSize);
-  end;
+  if FieldDef.DataType in ftSupported - ftBlobTypes then
+    Inc(DataSize, CalcFieldLen(FieldDef.DataType, FieldDef.Size) + 1);
+  for I := 0 to FieldDef.ChildDefs.Count - 1 do
+    CalcDataSize(FieldDef.ChildDefs[I], DataSize);
 end;
 
 procedure Error(const Msg: string);
@@ -621,6 +634,7 @@ begin
   FSaveLoadState := slsNone;
   FOneValueInArray := True;
   FDataSetClosed := False;
+  FTrimEmptyString := True;
 end;
 
 destructor TJvMemoryData.Destroy;
@@ -774,14 +788,15 @@ procedure TJvMemoryData.InitFieldDefsFromFields;
 var
   I: Integer;
   Offset: Word;
+  Field: TField;
 begin
   if FieldDefs.Count = 0 then
   begin
     for I := 0 to FieldCount - 1 do
     begin
-      with Fields[I] do
-        if (FieldKind in fkStoredFields) and not (DataType in ftSupported) then
-          ErrorFmt(SUnknownFieldType, [DisplayName]);
+      Field := Fields[I];
+      if (Field.FieldKind in fkStoredFields) and not (Field.DataType in ftSupported) then
+        ErrorFmt(SUnknownFieldType, [Field.DisplayName]);
     end;
     FreeIndexList;
   end;
@@ -792,9 +807,8 @@ begin
   for I := 0 to FieldDefList.Count - 1 do
   begin
     FOffsets[I] := Offset;
-    with FieldDefList[I] do
-      if DataType in ftSupported - ftBlobTypes then
-        Inc(Offset, CalcFieldLen(DataType, Size) + 1);
+    if FieldDefList[I].DataType in ftSupported - ftBlobTypes then
+      Inc(Offset, CalcFieldLen(FieldDefList[I].DataType, FieldDefList[I].Size) + 1);
   end;
 end;
 
@@ -1012,7 +1026,7 @@ begin
   Result := RecBuf <> nil;
 end;
 
-function TJvMemoryData.GetFieldData(Field: TField; Buffer: Pointer): Boolean;
+function TJvMemoryData.GetFieldData(Field: TField; Buffer: TJvValueBuffer): Boolean;
 var
   RecBuf: PJvMemBuffer;
   Data: PByte;
@@ -1021,6 +1035,7 @@ begin
   Result := False;
   if not GetActiveRecBuf(RecBuf) then
     Exit;
+  
   if Field.FieldNo > 0 then
   begin
     Data := FindFieldData(RecBuf, Field);
@@ -1031,15 +1046,18 @@ begin
       else
         Result := Data^ <> 0;
       Inc(Data);
-      if Field.DataType in [ftString, ftFixedChar, ftGuid] then
-        Result := Result and (StrLen(PAnsiChar(Data)) > 0)
-      else
-      if Field.DataType = ftWideString then
-        {$IFDEF UNICODE}
-        Result := Result and (StrLen(PWideChar(Data)) > 0);
-        {$ELSE}
-        Result := Result and (StrLenW(PWideChar(Data)) > 0);
-        {$ENDIF UNICODE}
+      case Field.DataType of
+        ftGuid:
+          Result := Result and (StrLen(PAnsiChar(Data)) > 0);
+        ftString, ftFixedChar:
+          Result := Result and (not TrimEmptyString or (StrLen(PAnsiChar(Data)) > 0));
+        ftWideString:
+          {$IFDEF UNICODE}
+          Result := Result and (not TrimEmptyString or (StrLen(PWideChar(Data)) > 0));
+          {$ELSE}
+          Result := Result and (not TrimEmptyString or (StrLenW(PWideChar(Data)) > 0));
+          {$ENDIF UNICODE}
+      end;
       if Result and (Buffer <> nil) then
         if Field.DataType = ftVariant then
         begin
@@ -1047,7 +1065,7 @@ begin
           PVariant(Buffer)^ := VarData;
         end
         else
-          Move(Data^, Buffer^, CalcFieldLen(Field.DataType, Field.Size));
+          Move(Data^, {$IFDEF RTL240_UP}PByte(@Buffer[0]){$ELSE}Buffer{$ENDIF RTL240_UP}^, CalcFieldLen(Field.DataType, Field.Size));
     end;
   end
   else
@@ -1056,11 +1074,11 @@ begin
     Inc(RecBuf, FRecordSize + Field.Offset);
     Result := Byte(RecBuf[0]) <> 0;
     if Result and (Buffer <> nil) then
-      Move(RecBuf[1], Buffer^, Field.DataSize);
+      Move(RecBuf[1], {$IFDEF RTL240_UP}PByte(@Buffer[0]){$ELSE}Buffer{$ENDIF RTL240_UP}^, Field.DataSize);
   end;
 end;
 
-procedure TJvMemoryData.SetFieldData(Field: TField; Buffer: Pointer);
+procedure TJvMemoryData.SetFieldData(Field: TField; Buffer: TJvValueBuffer);
 var
   RecBuf: PJvMemBuffer;
   Data: PByte;
@@ -1069,57 +1087,54 @@ begin
   if not (State in dsWriteModes) then
     Error(SNotEditing);
   GetActiveRecBuf(RecBuf);
-  with Field do
+  if Field.FieldNo > 0 then
   begin
-    if FieldNo > 0 then
+    if State in [dsCalcFields, dsFilter] then
+      Error(SNotEditing);
+    if Field.ReadOnly and not (State in [dsSetKey, dsFilter]) then
+      ErrorFmt(SFieldReadOnly, [Field.DisplayName]);
+    Field.Validate(Buffer);
+    if Field.FieldKind <> fkInternalCalc then
     begin
-      if State in [dsCalcFields, dsFilter] then
-        Error(SNotEditing);
-      if ReadOnly and not (State in [dsSetKey, dsFilter]) then
-        ErrorFmt(SFieldReadOnly, [DisplayName]);
-      Validate(Buffer);
-      if FieldKind <> fkInternalCalc then
+      Data := FindFieldData(RecBuf, Field);
+      if Data <> nil then
       begin
-        Data := FindFieldData(RecBuf, Field);
-        if Data <> nil then
+        if Field.DataType = ftVariant then
         begin
-          if DataType = ftVariant then
+          if Buffer <> nil then
+            VarData := PVariant(Buffer)^
+          else
+            VarData := EmptyParam;
+          Data^ := Ord((Buffer <> nil) and not VarIsNullEmpty(VarData));
+          if Data^ <> 0 then
           begin
-            if Buffer <> nil then
-              VarData := PVariant(Buffer)^
-            else
-              VarData := EmptyParam;
-            Data^ := Ord((Buffer <> nil) and not (VarIsNullEmpty(VarData)));
-            if Data^ <> 0 then
-            begin
-              Inc(Data);
-              PVariant(Data)^ := VarData;
-            end
-            else
-              FillChar(Data^, CalcFieldLen(DataType, Size), 0);
+            Inc(Data);
+            PVariant(Data)^ := VarData;
           end
           else
-          begin
-            Data^ := Ord(Buffer <> nil);
-            Inc(Data);
-            if Buffer <> nil then
-              Move(Buffer^, Data^, CalcFieldLen(DataType, Size))
-            else
-              FillChar(Data^, CalcFieldLen(DataType, Size), 0);
-          end;
+            FillChar(Data^, CalcFieldLen(Field.DataType, Field.Size), 0);
+        end
+        else
+        begin
+          Data^ := Ord(Buffer <> nil);
+          Inc(Data);
+          if Buffer <> nil then
+            Move({$IFDEF RTL240_UP}PByte(@Buffer[0]){$ELSE}Buffer{$ENDIF RTL240_UP}^, Data^, CalcFieldLen(Field.DataType, Field.Size))
+          else
+            FillChar(Data^, CalcFieldLen(Field.DataType, Field.Size), 0);
         end;
       end;
-    end
-    else {fkCalculated, fkLookup}
-    begin
-      Inc(RecBuf, FRecordSize + Offset);
-      Byte(RecBuf[0]) := Ord(Buffer <> nil);
-      if Byte(RecBuf[0]) <> 0 then
-        Move(Buffer^, RecBuf[1], DataSize);
     end;
-    if not (State in [dsCalcFields, dsFilter, dsNewValue]) then
-      DataEvent(deFieldChange, Longint(Field));
+  end
+  else {fkCalculated, fkLookup}
+  begin
+    Inc(RecBuf, FRecordSize + Field.Offset);
+    Byte(RecBuf[0]) := Ord(Buffer <> nil);
+    if Byte(RecBuf[0]) <> 0 then
+      Move({$IFDEF RTL240_UP}PByte(@Buffer[0]){$ELSE}Buffer{$ENDIF RTL240_UP}^, RecBuf[1], Field.DataSize);
   end;
+  if not (State in [dsCalcFields, dsFilter, dsNewValue]) then
+    DataEvent(deFieldChange, NativeInt(Field));
 end;
 
 procedure TJvMemoryData.SetFiltered(Value: Boolean);
@@ -1240,14 +1255,14 @@ begin
     Result := 0;
 end;
 
-procedure TJvMemoryData.GetBookmarkData(Buffer: PJvMemBuffer; Data: Pointer);
+procedure TJvMemoryData.GetBookmarkData(Buffer: PJvMemBuffer; Data: TJvBookmark);
 begin
-  Move(PMemBookmarkInfo(Buffer + FBookmarkOfs)^.BookmarkData, Data^, SizeOf(TBookmarkData));
+  Move(PMemBookmarkInfo(Buffer + FBookmarkOfs)^.BookmarkData, {$IFDEF RTL240_UP}PByte(@Data[0]){$ELSE}Data{$ENDIF RTL240_UP}^, SizeOf(TBookmarkData));
 end;
 
-procedure TJvMemoryData.SetBookmarkData(Buffer: PJvMemBuffer; Data: Pointer);
+procedure TJvMemoryData.SetBookmarkData(Buffer: PJvMemBuffer; Data: TJvBookmark);
 begin
-  Move(Data^, PMemBookmarkInfo(Buffer + FBookmarkOfs)^.BookmarkData, SizeOf(TBookmarkData));
+  Move({$IFDEF RTL240_UP}PByte(@Data[0]){$ELSE}Data{$ENDIF RTL240_UP}^, PMemBookmarkInfo(Buffer + FBookmarkOfs)^.BookmarkData, SizeOf(TBookmarkData));
 end;
 
 function TJvMemoryData.GetBookmarkFlag(Buffer: PJvMemBuffer): TBookmarkFlag;
@@ -1260,13 +1275,13 @@ begin
   PMemBookmarkInfo(Buffer + FBookmarkOfs)^.BookmarkFlag := Value;
 end;
 
-procedure TJvMemoryData.InternalGotoBookmark(Bookmark: Pointer);
+procedure TJvMemoryData.InternalGotoBookmark(Bookmark: TJvBookmark);
 var
   Rec: TJvMemoryRecord;
   SavePos: Integer;
   Accept: Boolean;
 begin
-  Rec := FindRecordID(TBookmarkData(Bookmark^));
+  Rec := FindRecordID(TBookmarkData({$IFDEF RTL240_UP}PByte(@Bookmark[0]){$ELSE}Bookmark{$ENDIF RTL240_UP}^));
   if Rec <> nil then
   begin
     Accept := True;
@@ -1357,7 +1372,7 @@ begin
     Inc(FAutoInc);
 end;
 
-procedure TJvMemoryData.InternalAddRecord(Buffer: Pointer; Append: Boolean);
+procedure TJvMemoryData.InternalAddRecord(Buffer: TJvRecordBuffer; Append: Boolean);
 var
   RecPos: Integer;
   Rec: TJvMemoryRecord;
@@ -1701,9 +1716,8 @@ function TJvMemoryData.Lookup(const KeyFields: string; const KeyValues: Variant;
   const ResultFields: string): Variant;
 var
   FieldCount: Integer;
-  Fields: TList;
+  Fields: TList{$IFDEF RTL240_UP}<TField>{$ENDIF RTL240_UP};
   Fld: TField; //else BAD mem leak on 'Field.asString'
-  // Bookmark: TBookmarkStr;
   SaveState: TDataSetState;
   I: Integer;
   Matched: Boolean;
@@ -1752,7 +1766,7 @@ begin
   if IsEmpty then
     Exit;
 
-  Fields := TList.Create;
+  Fields := TList{$IFDEF RTL240_UP}<TField>{$ENDIF RTL240_UP}.Create;
   try
     GetFieldList(Fields, KeyFields);
     FieldCount := Fields.Count;
@@ -2134,6 +2148,12 @@ begin
   end;
 end;
 
+procedure TJvMemoryData.SwapRecords(Idx1, Idx2: integer);
+begin
+  FRecords.Exchange(Idx1, Idx2);
+end;
+
+
 procedure TJvMemoryData.Sort;
 var
   Pos: {$IFDEF COMPILER12_UP}DB.TBookmark{$ELSE}TBookmarkStr{$ENDIF COMPILER12_UP};
@@ -2317,7 +2337,7 @@ end;
 function TJvMemoryData.GetValues(FldNames: string = ''): Variant;
 var
   I: Integer;
-  List: TList;
+  List: TList{$IFDEF RTL240_UP}<TField>{$ENDIF RTL240_UP};
 begin
   Result := Null;
   if FldNames = '' then
@@ -2330,7 +2350,7 @@ begin
   // ADO, DBIsam, DBX and others to work.
   if Pos(';', FldNames) > 0 then
   begin
-    List := TList.Create;
+    List := TList{$IFDEF RTL240_UP}<TField>{$ENDIF RTL240_UP}.Create;
     GetFieldList(List, FldNames);
     Result := VarArrayCreate([0, List.Count - 1], varVariant);
     for I := 0 to List.Count - 1 do
@@ -2714,7 +2734,7 @@ var
           // Mantis #3974 : "FDeletedValues" is a List of Pointers, and each item have two
           // possible values... PxKey (a Variant) or NIL. The list counter is incremented
           // with the ADD() method and decremented with the DELETE() method
-          if not (PxKey = nil) then // ONLY if FDeletedValues[I] have a value <> NIL
+          if PxKey <> nil then // ONLY if FDeletedValues[I] have a value <> NIL
           begin
             xKey := PxKey^;
             bFound := FDataSet.Locate(FKeyFieldNames, xKey, []);
@@ -2912,7 +2932,7 @@ begin
     FField.Modified := True;
   if FModified then
     try
-      FDataSet.DataEvent(deFieldChange, Longint(FField));
+      FDataSet.DataEvent(deFieldChange, NativeInt(FField));
     except
       AppHandleException(Self);
     end;

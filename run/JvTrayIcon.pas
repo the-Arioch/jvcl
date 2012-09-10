@@ -48,9 +48,9 @@ uses
   {$IFDEF UNITVERSIONING}
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
-  Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, ExtCtrls,
+  Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms,
   Menus, ShellAPI, ImgList, DateUtils,
-  JvConsts, JvTypes, JvComponentBase;
+  JvComponentBase;
 
 type
   TBalloonType = (btNone, btError, btInfo, btWarning);
@@ -468,7 +468,7 @@ end;
 
 function FindToolbar(Window: THandle; var ToolbarHandle: THandle): BOOL; stdcall;
 var
-  Buf: array [Byte] of Char;
+  Buf: array[Byte] of Char;
 begin
   GetClassName(Window, Buf, Length(Buf) - 1);
   // Set result to false when we have found a toolbar
@@ -482,12 +482,9 @@ var
   TrayHandle: THandle;
 begin
   Result := 0;
-
   TrayHandle := GetTrayHandle;
-  if TrayHandle = 0 then
-    Exit;
-
-  EnumChildWindows(TrayHandle, @FindToolbar, LPARAM(@Result));
+  if TrayHandle <> 0 then
+    EnumChildWindows(TrayHandle, @FindToolbar, LPARAM(@Result));
 end;
 
 function GetIconRect(const AWnd: THandle; const AID: UINT; var IconRect: TRect): Boolean;
@@ -1578,9 +1575,8 @@ begin
   // data has no usefull meaning in a context of another
   // process (since Win95) - so we need
   // to allocate some memory inside Tray process.
-  // Use @ProcessId for C5/D5 compatibility
-
-  if GetWindowThreadProcessId(FToolbarHandle, @ProcessID) = 0 then
+  
+  if GetWindowThreadProcessId(FToolbarHandle, ProcessID) = 0 then
     Exit;
 
   FProcess := OpenProcess(PROCESS_ALL_ACCESS, False, ProcessID);

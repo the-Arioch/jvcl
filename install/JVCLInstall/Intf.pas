@@ -76,12 +76,13 @@ type
     procedure DeinstallJVCL(Progress: TDeinstallProgressEvent;
       DeleteFiles: TDeleteFilesEvent; RealUninstall: Boolean);
     procedure AddPathsToIDE;
-    function RegisterToIDE: Boolean;
+    procedure RegisterDesigntimePackages;
     procedure GetPackageBinariesForDeletion(List: TStrings);
     procedure CleanJVCLPalette(RemoveEmptyPalettes: Boolean);
     procedure RegisterJVCLVersionInfo;
 
     function GetTargetSymbol: string;
+    function GetMainTargetSymbol: string;
     function GetAutoDependencies: Boolean;
     function GetDebugUnits: Boolean;
     function GetBuild: Boolean;
@@ -121,7 +122,8 @@ type
 
     function GetOutputDirs(DebugUnits: Boolean): TOutputDirs;
 
-    property TargetSymbol: string read GetTargetSymbol;
+    property TargetSymbol: string read GetTargetSymbol; // includes personal/standard flag
+    property MainTargetSymbol: string read GetMainTargetSymbol; // without personal/standard flag
     property Target: TCompileTarget read GetTarget;
     property AutoDependencies: Boolean read GetAutoDependencies;
     property DebugUnits: Boolean read GetDebugUnits;

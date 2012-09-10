@@ -36,6 +36,9 @@ uses
   JclUnitVersioning,
   {$ENDIF UNITVERSIONING}
   Windows, Messages, CommCtrl, Types, SysUtils, Classes, Contnrs,
+  {$IFDEF HAS_UNIT_SYSTEM_UITYPES}
+  System.UITypes,
+  {$ENDIF}
   {$IFDEF JVCLThemesEnabled}
     {$IFDEF COMPILER7_UP}
   Themes, UxTheme,
@@ -43,7 +46,7 @@ uses
   ThemeSrv,
     {$ENDIF COMPILER7_UP}
   {$ENDIF JVCLThemesEnabled}
-  Controls, StdCtrls, Forms, Graphics, Buttons;
+  Controls, Forms, Graphics, Buttons;
 
 const
  // Add a message handler to a component that is themed by the ThemeManager but
@@ -91,7 +94,7 @@ type
   PThemedElementDetails = {$IFDEF COMPILER7_UP}Themes{$ELSE}ThemeSrv{$ENDIF}.PThemedElementDetails; {$EXTERNALSYM PThemedElementDetails}
   TThemedElementDetails = {$IFDEF COMPILER7_UP}Themes{$ELSE}ThemeSrv{$ENDIF}.TThemedElementDetails; {$EXTERNALSYM TThemedElementDetails}
   {$IFDEF COMPILER16_UP}
-  TThemeServices = {$IFDEF COMPILER7_UP}Themes{$ELSE}ThemeSrv{$ENDIF}.TCustomStyleServices; {$EXTERNALSYM TThemeServices}
+  TThemeServices = Themes.TCustomStyleServices; {$EXTERNALSYM TThemeServices}
   {$ELSE}
   TThemeServices = {$IFDEF COMPILER7_UP}Themes{$ELSE}ThemeSrv{$ENDIF}.TThemeServices; {$EXTERNALSYM TThemeServices}
   {$ENDIF COMPILER16_UP}
@@ -726,10 +729,14 @@ type
     {$IFNDEF COMPILER16_UP}
     function GetElementContentRect(DC: HDC; Details: TThemedElementDetails;
       const BoundingRect: TRect; out AContentRect: TRect): Boolean;
+    function IsSystemStyle: Boolean;
+    function Enabled: Boolean;
+    function Available: Boolean;
     {$ENDIF ~COMPILER16_UP}
   end;
 
 function ThemeServices: TThemeServicesEx;
+function StyleServices: TThemeServicesEx;
 
 { PaintControlBorder paints the themed border for WinControls only when they
   have the WS_EX_CLIENTEDGE. }
@@ -808,7 +815,6 @@ procedure DrawGlassableText(DC: HDC; const Text: string; var TextRect: TRect; Te
 procedure DrawGlassableImageList(ImageList: HIMAGELIST; Index: Integer; Dest: HDC; X, Y: Integer;
   Style: UINT; PaintOnGlass: Boolean = False);
 
-
 {$IFDEF UNITVERSIONING}
 const
   UnitVersioning: TUnitVersionInfo = (
@@ -844,7 +850,7 @@ var
   Cl: TColor;
 begin
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and
+  if ThemeServices.Enabled and
      (Control.Parent <> nil) and
      ((Color = TWinControlThemeInfo(Control.Parent).Color) or
       (ColorToRGB(Color) = ColorToRGB(TWinControlThemeInfo(Control.Parent).Color))) and
@@ -882,7 +888,7 @@ var
 begin
   {$IFDEF JVCLThemesEnabled}
   GetObject(Brush, SizeOf(LogBrush), @LogBrush);
-  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and
+  if ThemeServices.Enabled and
      (Control.Parent <> nil) and
      (LogBrush.lbColor = Cardinal(ColorToRGB(TWinControlThemeInfo(Control.Parent).Color))) and
      ((not NeedsParentBackground) or
@@ -917,7 +923,7 @@ var
 begin
   Result := False;
   {$IFDEF JVCLThemesEnabled}
-  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
+  if ThemeServices.Enabled then
   begin
     R := Rect;
     case uType of
@@ -1141,6 +1147,13 @@ procedure PerformEraseBackground(Control: TControl; DC: HDC; Offset: TPoint; con
 var
   WindowOrg: TPoint;
   OrgRgn, Rgn: THandle;
+  {$IFDEF COMPILER16_UP}
+  OldPen: HPEN;
+  OldBrush: HBRUSH;
+  OldFont: HFONT;
+  OldTextColor: TColorRef;
+  OldBkMode: Integer;
+  {$ENDIF COMPILER16_UP}
 begin
   if Control.Parent <> nil then
   begin
@@ -1168,7 +1181,42 @@ begin
     end;
 
     try
+      {$IFDEF COMPILER16_UP}
+      // Delphi XE2's Style-Engine has a bug in the TStyleHook.WMEraseBkgnd that replaces the
+      // selected GDI objects with the TCanvas default objects ("System" font, ...).
+      // We need to repair the damage in order to have the same behavior of the native theming API.
+      // General rule for WM_ERASEBKGND: Return the DC in the state in that it was when the function
+      // was called.
+      OldPen := 0;
+      OldBrush := 0;
+      OldFont := 0;
+      OldTextColor := 0;
+      OldBkMode := 0;
+      if StyleServices.Enabled and not StyleServices.IsSystemStyle then
+      begin
+        OldPen := GetCurrentObject(DC, OBJ_PEN);
+        OldBrush := GetCurrentObject(DC, OBJ_BRUSH);
+        OldFont := GetCurrentObject(DC, OBJ_FONT);
+        OldTextColor := GetTextColor(DC);
+        OldBkMode := GetBkMode(DC);
+      end;
+      {$ENDIF COMPILER16_UP}
       Control.Parent.Perform(WM_ERASEBKGND, DC, DC); // force redraw
+      {$IFDEF COMPILER16_UP}
+      if StyleServices.Enabled and not StyleServices.IsSystemStyle then
+      begin
+        if GetCurrentObject(DC, OBJ_PEN) <> OldPen then
+          SelectObject(DC, OldPen);
+        if GetCurrentObject(DC, OBJ_BRUSH) <> OldBrush then
+          SelectObject(DC, OldBrush);
+        if GetCurrentObject(DC, OBJ_FONT) <> OldFont then
+          SelectObject(DC, OldFont);
+        if GetTextColor(DC) <> OldTextColor then
+          SetTextColor(DC, OldTextColor);
+        if GetBkMode(DC) <> OldBkMode then
+          SetBkMode(DC, OldBkMode);
+      end;
+      {$ENDIF COMPILER16_UP}
     finally
       if (Offset.X <> 0) and (Offset.Y <> 0) then
         SetWindowOrgEx(DC, WindowOrg.X, WindowOrg.Y, nil);
@@ -1202,7 +1250,7 @@ var
 {$ENDIF JVCLThemesEnabled}
 begin
   {$IFDEF JVCLThemesEnabled}
-  if (Style <> bsWin31) and ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} then
+  if (Style <> bsWin31) and ThemeServices.Enabled then
   begin
     Result := Client;
 
@@ -1305,7 +1353,7 @@ var
 {$ENDIF COMPILER11_UP}
 begin
   {$IFDEF COMPILER11_UP}
-  if ThemeServices.{$IFDEF RTL230_UP}Enabled{$ELSE}ThemesEnabled{$ENDIF RTL230_UP} and CheckWin32Version(6, 0) then
+  if ThemeServices.Enabled and CheckWin32Version(6, 0) then
   begin
     FillChar(Options, SizeOf(Options), 0);
     Options.dwSize := SizeOf(Options);
@@ -1316,18 +1364,31 @@ begin
     Options.dwFlags := Options.dwFlags or DTT_TEXTCOLOR;
     Options.crText := GetTextColor(DC);
 
-    {$IFDEF COMPILER12_UP}
-    with ThemeServices do
-      if DrawThemeTextEx(Theme[teToolBar], DC, TP_BUTTON, TS_NORMAL, PWideChar(Text), Length(Text),
-                         TextFlags, TextRect, Options) <> E_NOTIMPL then
-        Exit;
-    {$ELSE}
-    S := Text;
-    with ThemeServices do
-      if DrawThemeTextEx(Theme[teToolBar], DC, TP_BUTTON, TS_NORMAL, PWideChar(S), Length(S),
-                         TextFlags, @TextRect, Options) <> E_NOTIMPL then
-        Exit;
-    {$ENDIF COMPILER12_UP}
+    {$IFDEF COMPILER16_UP}
+    if not StyleServices.IsSystemStyle then
+    begin
+      // The Style engine doesn't have DrawThemeTextEx support
+      {$WARNINGS OFF} // ignore "deprecated" warning
+      StyleServices.DrawText(DC, StyleServices.GetElementDetails(tbPushButtonNormal), Text, TextRect, TextFlags, 0);
+      {$WARNINGS ON}
+      Exit;
+    end
+    else
+    {$ENDIF}
+    begin
+      {$IFDEF COMPILER12_UP}
+      with ThemeServices do
+        if DrawThemeTextEx(Theme[teToolBar], DC, TP_BUTTON, TS_NORMAL, PWideChar(Text), Length(Text),
+                           TextFlags, TextRect, Options) <> E_NOTIMPL then
+          Exit;
+      {$ELSE}
+      S := Text;
+      with ThemeServices do
+        if DrawThemeTextEx(Theme[teToolBar], DC, TP_BUTTON, TS_NORMAL, PWideChar(S), Length(S),
+                           TextFlags, @TextRect, Options) <> E_NOTIMPL then
+          Exit;
+      {$ENDIF COMPILER12_UP}
+    end;
   end;
   {$ENDIF COMPILER11_UP}
   Windows.DrawText(DC, PChar(Text), Length(Text), TextRect, TextFlags);
@@ -1401,9 +1462,30 @@ begin
   AContentRect := ContentRect(DC, Details, BoundingRect);
   Result := True;
 end;
+
+function TThemeServicesEx.IsSystemStyle: Boolean;
+begin
+  Result := True;
+end;
+
+function TThemeServicesEx.Enabled: Boolean;
+begin
+  Result := ThemesEnabled;
+end;
+
+function TThemeServicesEx.Available: Boolean;
+begin
+  Result := ThemesAvailable;
+end;
 {$ENDIF ~COMPILER16_UP}
 
 function ThemeServices: TThemeServicesEx;
+begin
+  Result := TThemeServicesEx(
+    {$IFDEF COMPILER7_UP}Themes{$ELSE}ThemeSrv{$ENDIF}.{$IFDEF RTL230_UP}StyleServices{$ELSE}ThemeServices{$ENDIF RTL230_UP});
+end;
+
+function StyleServices: TThemeServicesEx;
 begin
   Result := TThemeServicesEx(
     {$IFDEF COMPILER7_UP}Themes{$ELSE}ThemeSrv{$ENDIF}.{$IFDEF RTL230_UP}StyleServices{$ELSE}ThemeServices{$ENDIF RTL230_UP});
