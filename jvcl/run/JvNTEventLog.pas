@@ -63,6 +63,7 @@ type
     procedure SetSource(const Value: string);
     procedure SetLog(const Value: string);
     function GetEventCount: Cardinal;
+    function DoReadRecord(const Direction: ShortInt; const RecNo: Cardinal = 0): boolean;
     procedure SeekRecord(N: Cardinal);
   public
     constructor Create(AOwner: TComponent); override;
@@ -73,6 +74,7 @@ type
     procedure Last;
     function Eof: Boolean;
     procedure Next;
+    procedure Prior;
     procedure Seek(N: Cardinal);
     procedure ReadEventLogs(AStrings: TStrings);
     property EventCount: Cardinal read GetEventCount;
@@ -80,7 +82,7 @@ type
   published
     property Server: string read FServer write SetServer;
     property Source: string read FSource write SetSource;
-    property Log: string read FLog write SetLog;
+    property Log: string read FLog write SetLog; // Remove ? Seems to be a proper name for Source but never been actually used
     property Active: Boolean read FActive write SetActive;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
   end;
@@ -96,23 +98,32 @@ type
     constructor Create(AOwner: TComponent);
   end;
 
+  TEventSeverity = (evsSuccess, evsInfo, evsWarning, evsError );
+
   TJvNTEventLogRecord = class(TObject)
   private
     FEventLog: TJvNTEventLog;
     FCurrentRecord: Pointer;
     FOwner: TComponent;
-    function GetRecordNumber: Cardinal;
+    FRecordBytesSize: Cardinal;
+    FNonParsed: boolean;
+    FEventArgs: array of string;
+    FComputerName, FEventSource: string;
+    function GetRecordNumber: Cardinal;  {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
     function GetDateTime: TDateTime;
-    function GetID: DWORD;
+    function GetRawID: DWORD;            {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
     function GetType: string;
-    function GetStringCount: DWORD;
-    function GetCategory: Cardinal;
+    function GetStringCount: DWORD;      {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
+    function GetCategory: Cardinal;      {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
     function GetSource: string;
     function GetComputer: string;
     function GetSID: PSID;
     function GetString(Index: Cardinal): string;
     function GetMessageText: string;
     function GetUsername: string;
+    procedure SetRecordBytesSize(const Value: Cardinal);
+    property RecordBytesSize: Cardinal read FRecordBytesSize write SetRecordBytesSize;
+    function TryParseRecord(BytesRead: Cardinal = 0): boolean;
   public
     constructor Create(AOwner: TComponent);
     property RecordNumber: Cardinal read GetRecordNumber;
@@ -121,7 +132,12 @@ type
     property Category: Cardinal read GetCategory;
     property Source: string read GetSource;
     property Computer: string read GetComputer;
-    property ID: DWORD read GetID;
+    property ID: DWORD read GetRawID;
+    function Code: Word;                {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
+    function CustomCode: boolean;       {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
+    function Facility: Word;
+    function Severity: TEventSeverity;
+    function SeverityAsText: string;
     property StringCount: DWORD read GetStringCount;
     property SID: PSID read GetSID;
     property EventString[Index: Cardinal]: string read GetString;
@@ -130,33 +146,8 @@ type
     property Owner: TComponent read FOwner;
   end;
 
-{$IFDEF UNITVERSIONING}
-const
-  UnitVersioning: TUnitVersionInfo = (
-    RCSfile: '$URL$';
-    Revision: '$Revision$';
-    Date: '$Date$';
-    LogPath: 'JVCL\run'
-  );
-{$ENDIF UNITVERSIONING}
-
-implementation
-
-uses
-  Registry,
-  JvResources;
-
-const
-  EVENTLOG_SEQUENTIAL_READ = $0001;
-  EVENTLOG_SEEK_READ = $0002;
-  EVENTLOG_FORWARDS_READ = $0004;
-  EVENTLOG_BACKWARDS_READ = $0008;
-
-  cEventLogBaseKey = 'SYSTEM\CurrentControlSet\Services\EventLog';
-
-type
   PEventLogRecord = ^TEventLogRecord;
-  TEventLogRecord = record
+  TEventLogRecord = packed record
     Length: DWORD; // Length of full record
     Reserved: DWORD; // Used by the service
     RecordNumber: DWORD; // Absolute record number
@@ -174,6 +165,32 @@ type
     DataLength: DWORD;
     DataOffset: DWORD; // Offset from beginning of record
   end;
+
+
+{$IFDEF UNITVERSIONING}
+const
+  UnitVersioning: TUnitVersionInfo = (
+    RCSfile: '$URL$';
+    Revision: '$Revision$';
+    Date: '$Date$';
+    LogPath: 'JVCL\run'
+  );
+{$ENDIF UNITVERSIONING}
+
+implementation
+
+uses
+  Registry,
+  JclStringLists,
+  JvResources;
+
+const
+  EVENTLOG_SEQUENTIAL_READ = $0001;
+  EVENTLOG_SEEK_READ = $0002;
+  EVENTLOG_FORWARDS_READ = $0004;
+  EVENTLOG_BACKWARDS_READ = $0008;
+
+  cEventLogBaseKey = 'SYSTEM\CurrentControlSet\Services\EventLog';
 
 //=== { TJvNTEventLog } ======================================================
 
@@ -193,6 +210,7 @@ begin
   FEventRecord.Free;
   inherited Destroy;
 end;
+
 
 procedure TJvNTEventLog.SetActive(Value: Boolean);
 begin
@@ -250,7 +268,7 @@ end;
 function TJvNTEventLog.GetEventCount: Cardinal;
 begin
   if Active then
-    GetNumberOfEventLogRecords(FLogHandle, Result)
+    Win32Check( GetNumberOfEventLogRecords(FLogHandle, Result) )
   else
     Result := 0;
 end;
@@ -299,51 +317,56 @@ begin
     (FLastError = ERROR_HANDLE_EOF);
 end;
 
-procedure TJvNTEventLog.Next;
+function TJvNTEventLog.DoReadRecord(const Direction: ShortInt;
+  const RecNo: Cardinal): boolean;
 var
-  BytesRead, BytesNeeded, Flags: DWORD;
+  Flags: DWORD;
+  BytesRead, BytesNeeded: Cardinal;
   Dummy: Char;
 begin
-  Flags := EVENTLOG_SEQUENTIAL_READ;
-  Flags := Flags or EVENTLOG_FORWARDS_READ;
+  if Direction = 0
+     then Flags := EVENTLOG_SEEK_READ
+     else Flags := EVENTLOG_SEQUENTIAL_READ;
+  if Direction < 0
+     then Flags := Flags or EVENTLOG_BACKWARDS_READ
+     else Flags := Flags or EVENTLOG_FORWARDS_READ;
 
-  ReadEventLog(FLogHandle, Flags, 0, @Dummy, 0, BytesRead, BytesNeeded);
+  Result := False;
+  ReadEventLog(FLogHandle, Flags, RecNo, @Dummy, 0, BytesRead, BytesNeeded);
   FLastError := GetLastError;
   if FLastError = ERROR_INSUFFICIENT_BUFFER then
   begin
-    ReallocMem(FEventRecord.FCurrentRecord, BytesNeeded);
-    if not ReadEventLog(FLogHandle, Flags, 0, FEventRecord.FCurrentRecord, BytesNeeded, BytesRead, BytesNeeded) then
+    FEventRecord.RecordBytesSize := BytesNeeded;
+    if not ReadEventLog(FLogHandle, Flags, RecNo, FEventRecord.FCurrentRecord, BytesNeeded, BytesRead, BytesNeeded) then
       RaiseLastOSError;
+    Result := FEventRecord.TryParseRecord(BytesRead);
+//    if not FEventRecord.IsRecordValid(BytesRead) then
+//      Raise EIntError.Create(ClassName + ': Invalid WinNT Event structure.');
   end
   else
   if FLastError <> ERROR_HANDLE_EOF then
     RaiseLastOSError;
 end;
 
+procedure TJvNTEventLog.Next;
+begin
+  DoReadRecord(+1);
+end;
+
+procedure TJvNTEventLog.Prior;
+begin
+  DoReadRecord(-1);
+end;
+
 procedure TJvNTEventLog.SeekRecord(N: Cardinal);
 var
-  Offset, Flags: DWORD;
-  BytesRead, BytesNeeded: Cardinal;
-  Dummy: Char;
-  RecNo: Integer;
+  Offset: DWORD;
+  RecNo: Cardinal;
 begin
-  GetOldestEventLogRecord(FLogHandle, Offset);
+  Win32Check( GetOldestEventLogRecord(FLogHandle, Offset) );
   RecNo := N + Offset;
 
-  Flags := EVENTLOG_SEEK_READ;
-  Flags := Flags or EVENTLOG_FORWARDS_READ;
-
-  ReadEventLog(FLogHandle, Flags, RecNo, @Dummy, 0, BytesRead, BytesNeeded);
-  FLastError := GetLastError;
-  if FLastError = ERROR_INSUFFICIENT_BUFFER then
-  begin
-    ReallocMem(FEventRecord.FCurrentRecord, BytesNeeded);
-    if not ReadEventLog(FLogHandle, Flags, RecNo, FEventRecord.FCurrentRecord, BytesNeeded, BytesRead, BytesNeeded) then
-      RaiseLastOSError;
-  end
-  else
-  if FLastError <> ERROR_HANDLE_EOF then
-    RaiseLastOSError;
+  DoReadRecord(0, RecNo);
 end;
 
 procedure TJvNTEventLog.Seek(N: Cardinal);
@@ -421,6 +444,70 @@ begin
   FOwner := AOwner;
 end;
 
+function TJvNTEventLogRecord.TryParseRecord(BytesRead: Cardinal): boolean;
+Var CR: PEventLogRecord;
+    PLen2: PCardinal; LastDataOffs: Cardinal;
+    i: integer;
+
+  ParsingStringPtr: PChar;
+  function ParseString(const InitOffset: Cardinal = 0): string;
+  begin
+    if InitOffset <> 0 then
+       Cardinal(ParsingStringPtr) := Cardinal(CR) + InitOffset;
+
+    Result := ParsingStringPtr;
+    Inc(ParsingStringPtr, Length(Result) + 1);
+  end;
+begin
+  if BytesRead = 0 then BytesRead := RecordBytesSize;
+
+  Result := False;
+  if BytesRead < RecordBytesSize then exit;
+  if FCurrentRecord = nil then exit;
+
+  CR := FCurrentRecord;
+  if RecordBytesSize < SizeOf(CR^) then exit;
+  if RecordBytesSize < CR^.Length then exit;
+
+  LastDataOffs := RecordBytesSize - SizeOf(PLen2^);
+  Cardinal(PLen2) := Cardinal(CR) + LastDataOffs;
+  if PLen2^ <> CR^.Length then exit;
+
+  if CR^.Reserved <> $654c664c then exit;
+
+  if (CR^.UserSidOffset <> 0) and (CR^.UserSidLength <> 0) then
+     if CR^.UserSidOffset + CR^.UserSidLength > LastDataOffs then exit;
+
+  if (CR^.DataOffset <> 0) and (CR^.DataLength <> 0) then
+     if CR^.DataOffset + CR^.DataLength > LastDataOffs then exit;
+
+  if CR^.StringOffset > LastDataOffs then exit;
+
+  FEventSource := ParseString( SizeOf(TEventLogRecord) );
+  FComputerName := ParseString();
+
+  SetLength(FEventArgs, CR^.NumStrings);
+  if Length(FEventArgs) > 0 then begin
+     i := 0;
+     FEventArgs[i] := ParseString(CR^.StringOffset);
+     While True do begin
+        Inc(i);
+        if i > High(FEventArgs) then break;
+        FEventArgs[i] := ParseString();
+     end;
+  end;
+
+  Result := True;
+  FNonParsed := False;
+end;
+
+procedure TJvNTEventLogRecord.SetRecordBytesSize(const Value: Cardinal);
+begin
+  ReallocMem(FCurrentRecord, Value);
+  FRecordBytesSize := Value;
+  FNonParsed := True;
+end;
+
 function TJvNTEventLogRecord.GetRecordNumber: Cardinal;
 begin
   Result := PEventLogRecord(FCurrentRecord)^.RecordNumber;
@@ -429,11 +516,13 @@ end;
 function TJvNTEventLogRecord.GetMessageText: string;
 var
   MessagePath: string;
-  Count, I: Integer;
-  P: PChar;
-  Args, PArgs: ^PChar;
+  {Count,} I: Integer;
+//  P: PChar;
+  Args: array of PChar;
+//  iArgs: Integer;
   St: string;
   reg: TRegistry;
+  jsl: IJclStringList;
 
   function FormatMessageFrom(const DllName: string): Boolean;
   var
@@ -442,64 +531,66 @@ var
     FullDLLName: array [0..MAX_PATH] of Char;
   begin
     Result := False;
-    ExpandEnvironmentStrings(PChar(DllName), FullDLLName, MAX_PATH);
-    DllModule := LoadLibraryEx(FullDLLName, 0, LOAD_LIBRARY_AS_DATAFILE);
+
+    DllModule := 0;
+    if DllName > '' then begin
+       ExpandEnvironmentStrings(PChar(DllName), FullDLLName, MAX_PATH);
+       DllModule := LoadLibraryEx(FullDLLName, 0, LOAD_LIBRARY_AS_DATAFILE);
+    end;
     if DllModule <> 0 then
     try
-      // (rom) memory leak fixed
       if FormatMessage(
-        FORMAT_MESSAGE_FROM_HMODULE or FORMAT_MESSAGE_ARGUMENT_ARRAY,
-        Pointer(DllModule), ID, 0, Buffer, SizeOf(Buffer), Args) > 0 then
+        FORMAT_MESSAGE_FROM_SYSTEM or FORMAT_MESSAGE_FROM_HMODULE or FORMAT_MESSAGE_ARGUMENT_ARRAY,
+        Pointer(DllModule), ID, 0, Buffer, Length(Buffer), @Args[Low(Args)]) > 0 then
       begin
         Buffer[StrLen(Buffer) - 2] := #0;
         St := Buffer;
         Result := True;
-      end
+      end else
+        RaiseLastOSError;
     finally
       FreeLibrary(DllModule);
     end
   end;
 
 begin
-  St := '';
-  Count := StringCount;
-  GetMem(Args, Count * SizeOf(PChar));
+  Result := '';
+
+  if FNonParsed then
+     if not TryParseRecord() then
+        Exit;
+
+  SetLength(Args, Length(FEventArgs));
+  for I := Low(Args) to High(Args) do
+      Args[I] := PChar( FEventArgs[I] );
+
+  reg := TRegistry.Create;
   try
-    PArgs := Args;
-    P := PEventLogRecord(FCurrentRecord)^.StringOffset + PChar(FCurrentRecord);
-    for I := 0 to Count - 1 do
-    begin
-      PArgs^ := P;
-      Inc(P, lstrlen(P) + 1);
-      Inc(PArgs);
+    reg.RootKey := HKEY_LOCAL_MACHINE;
+    reg.OpenKeyReadOnly(Format('%s\%s\%s', [cEventLogBaseKey, FEventLog.Source, Self.Source]));
+    if reg.ReadString('ParameterMessageFile') <> '' then begin
+       Result := RsLogNotImplParamsFile; // http://delphimaster.net/view/4-65276
+       exit;
     end;
-
-    reg := TRegistry.Create;
-    try
-      reg.RootKey := HKEY_LOCAL_MACHINE;
-      reg.OpenKey(Format('%s\%s\%s', [cEventLogBaseKey, FEventLog.Log, Source]), False); {rw}
-//      OpenKey(Format('SYSTEM\CurrentControlSet\Services\EventLog\%s\%s', [FEventLog.Log, FEventLog.Source]), False);
-      MessagePath := reg.ReadString('EventMessageFile');
-    finally
-      reg.Free;
+    MessagePath := reg.ReadString('EventMessageFile');
+    if (MessagePath = '') and (reg.ReadString('ProviderGuid') <> '') then begin
+       Result := RsLogNotImplVista;
+       exit;  // Vista+ Evt***  new API - someone's welcome to implement
     end;
-
-    repeat
-      I := Pos(';', MessagePath);
-      if I <> 0 then
-      begin
-        if FormatMessageFrom(Copy(MessagePath, 1, I - 1 )) then {rw}
-//          if FormatMessageFrom(Copy(MessagePath, 1, I)) then
-          Break;
-        MessagePath := Copy(MessagePath, I + 1, MaxInt); {rw}
-//          MessagePath := Copy(MessagePath, I, MaxInt);
-      end
-      else
-        FormatMessageFrom(MessagePath);
-    until I = 0;
   finally
-    FreeMem(Args)
+    reg.Free;
   end;
+
+  St := '';
+  jsl := JclStringList.Split(MessagePath,';').Trim;
+
+  if jsl.Count > 0 then begin
+    I := 0;
+    while (I < jsl.Count) and (not FormatMessageFrom(jsl[I]))
+      do Inc(I);
+  end else
+    FormatMessageFrom(''); // last resort: try OS-wide message tables
+
   Result := St;
 end;
 
@@ -549,21 +640,58 @@ end;
 
 function TJvNTEventLogRecord.GetSource: string;
 begin
-  Result := PChar(FCurrentRecord) + SizeOf(TEventLogRecord);
+  Result := '';
+  if FNonParsed then
+     if not TryParseRecord() then
+        Exit;
+
+  Result := FEventSource;
 end;
 
 function TJvNTEventLogRecord.GetComputer: string;
-var
-  P: PChar;
 begin
-  P := PChar(FCurrentRecord) + SizeOf(TEventLogRecord);
-  Result := P + StrLen(P) + 1;
+  Result := '';
+  if FNonParsed then
+     if not TryParseRecord() then
+        Exit;
+
+  Result := FComputerName;
 end;
 
-function TJvNTEventLogRecord.GetID: DWORD;
+function TJvNTEventLogRecord.GetRawID: DWORD;
 begin
+  // Raw Event ID, see MSDN for its internal format
   Result := PEventLogRecord(FCurrentRecord)^.EventID;
 end;
+
+function TJvNTEventLogRecord.Code: Word;
+begin
+  Result := ID and $0000FFFF;
+end;
+
+function TJvNTEventLogRecord.Facility: Word;
+begin
+  Result := (ID shr 16) and $00000FFF;
+end;
+
+function TJvNTEventLogRecord.CustomCode: boolean;
+begin
+  Result := (ID and $20000000 ) <> 0;
+end;
+
+function TJvNTEventLogRecord.Severity: TEventSeverity;
+begin
+  Byte(Result) := (ID shr 30) and $03;
+end;
+
+const SeverityDescriptions: array [ TEventSeverity] of string =
+ ( RsLogSuccess, RsLogInformation, RsLogWarning, RsLogERROR);
+
+function TJvNTEventLogRecord.SeverityAsText: string;
+begin
+  Result := SeverityDescriptions[Severity];
+end;
+
 
 function TJvNTEventLogRecord.GetStringCount: DWORD;
 begin
@@ -583,20 +711,14 @@ begin
 end;
 
 function TJvNTEventLogRecord.GetString(Index: Cardinal): string;
-var
-  P: PChar;
 begin
   Result := '';
-  if Index < StringCount then
-  begin
-    P := PChar(FCurrentRecord) + PEventLogRecord(FCurrentRecord)^.StringOffset;
-    while Index > 0 do
-    begin
-      Inc(P, StrLen(P) + 1);
-      Dec(Index);
-    end;
-    Result := StrPas(P);
-  end;
+
+  if FNonParsed then
+     if not TryParseRecord() then
+        Exit;
+
+  Result := FEventArgs[Index];
 end;
 
 function TJvNTEventLogRecord.GetDateTime: TDateTime;

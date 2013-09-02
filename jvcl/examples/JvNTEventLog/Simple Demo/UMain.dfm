@@ -1,0 +1,89 @@
+object frmMain: TfrmMain
+  Left = 0
+  Top = 0
+  Caption = 'JvNTEventLog Demo'
+  ClientHeight = 287
+  ClientWidth = 608
+  Color = clBtnFace
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -14
+  Font.Name = 'Tahoma'
+  Font.Style = []
+  OldCreateOrder = False
+  DesignSize = (
+    608
+    287)
+  PixelsPerInch = 120
+  TextHeight = 17
+  object MLog: TMemo
+    Left = 0
+    Top = 0
+    Width = 430
+    Height = 287
+    Anchors = [akLeft, akTop, akRight, akBottom]
+    ReadOnly = True
+    ScrollBars = ssVertical
+    TabOrder = 0
+  end
+  object CLogfile: TRadioGroup
+    Left = 438
+    Top = 113
+    Width = 160
+    Height = 121
+    Anchors = [akRight, akBottom]
+    Items.Strings = (
+      'Application'
+      'Security'
+      'System')
+    TabOrder = 1
+    OnClick = CLogfileClick
+  end
+  object BtnLog: TButton
+    Left = 438
+    Top = 245
+    Width = 160
+    Height = 32
+    Anchors = [akRight, akBottom]
+    Caption = 'Log latest event'
+    Enabled = False
+    TabOrder = 2
+    OnClick = BtnLogClick
+  end
+  object btnISAM: TSpinButton
+    Left = 496
+    Top = 24
+    Width = 33
+    Height = 41
+    Anchors = [akTop, akRight]
+    DownGlyph.Data = {
+      0E010000424D0E01000000000000360000002800000009000000060000000100
+      200000000000D800000000000000000000000000000000000000008080000080
+      8000008080000080800000808000008080000080800000808000008080000080
+      8000008080000080800000808000000000000080800000808000008080000080
+      8000008080000080800000808000000000000000000000000000008080000080
+      8000008080000080800000808000000000000000000000000000000000000000
+      0000008080000080800000808000000000000000000000000000000000000000
+      0000000000000000000000808000008080000080800000808000008080000080
+      800000808000008080000080800000808000}
+    Enabled = False
+    TabOrder = 3
+    UpGlyph.Data = {
+      0E010000424D0E01000000000000360000002800000009000000060000000100
+      200000000000D800000000000000000000000000000000000000008080000080
+      8000008080000080800000808000008080000080800000808000008080000080
+      8000000000000000000000000000000000000000000000000000000000000080
+      8000008080000080800000000000000000000000000000000000000000000080
+      8000008080000080800000808000008080000000000000000000000000000080
+      8000008080000080800000808000008080000080800000808000000000000080
+      8000008080000080800000808000008080000080800000808000008080000080
+      800000808000008080000080800000808000}
+    OnDownClick = btnISAMDownClick
+    OnUpClick = btnISAMUpClick
+  end
+  object JvNTEventLog1: TJvNTEventLog
+    Active = False
+    Left = 376
+    Top = 8
+  end
+end

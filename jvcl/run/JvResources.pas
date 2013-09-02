@@ -1529,9 +1529,12 @@ resourcestring
   RsLogError = 'Error';
   RsLogWarning = 'Warning';
   RsLogInformation = 'Information';
+  RsLogSuccess     = 'Success';
   RsLogSuccessAudit = 'Success Audit';
   RsLogFailureAudit = 'Failure Audit';
   RsLogUserSIDNotFound = 'User SID not found';
+  RsLogNotImplVista = 'Not implemented: Vista/Server2008 new API ("Evt***" functions).';
+  RsLogNotImplParamsFile = 'Not implemented: custom parameters file parsing.';
 
 //=== JvObjectPickerDialog.pas ===============================================
 resourcestring
