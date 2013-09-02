@@ -27,6 +27,12 @@ unit JvNTEventLog;
 
 {$I jvcl.inc}
 {$I windowsonly.inc}
+{$IfNDef CPU386} According to MSDN Win64 requires va_list usage in FormatMessage, so it would deny this component calls. {$EndIf}
+
+//TODO: Make Win64 compatible ( va_* arguments for FormatMessage(...), Pointers math (same datatypes in Delphi 7 and XE2/x64)
+//TODO: Make Vista+ compatible ( New GUID-based Events API, codename "Crimson", Evt**** WinAPI functions )
+//TODO: Make Win2000/XP compatible: ( Parameters Substitution files loading and parsing )
+// ...someone who cares is welcome to implement.
 
 interface
 
@@ -45,7 +51,7 @@ type
   TJvNTEventLogRecord = class;
 
   {$IFDEF RTL230_UP}
-  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  [ComponentPlatformsAttribute(pidWin32)]
   {$ENDIF RTL230_UP}
   TJvNTEventLog = class(TJvComponent)
   private
@@ -707,7 +713,7 @@ function TJvNTEventLogRecord.GetSID: PSID;
 begin
   Result := nil;
   if PEventLogRecord(FCurrentRecord)^.UserSidLength > 0 then
-    Result := PSID(PChar(FCurrentRecord) + PEventLogRecord(FCurrentRecord)^.UserSidOffset);
+     Cardinal(Result) := Cardinal(FCurrentRecord) + PEventLogRecord(FCurrentRecord)^.UserSidOffset;
 end;
 
 function TJvNTEventLogRecord.GetString(Index: Cardinal): string;
