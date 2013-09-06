@@ -2343,16 +2343,28 @@ procedure TJvCustomListBox.WndProc(var Msg: TMessage);
 var
   ItemWidth: Word;
 begin
+//TODO:  Three of five messages below have later worked out in
+//
+//    procedure LBAddString(var Msg: TMessage); message LB_ADDSTRING;
+//    procedure LBInsertString(var Msg: TMessage); message LB_INSERTSTRING;
+//    procedure LBDeleteString(var Msg: TMessage); message LB_DELETESTRING;
+//
+//    Either that is intended (to make pre- and post-processing around stock
+//      VCL.TListBox behavior), then it should be documented.
+//    Or that is naive merging artefact and should be fixed (single responsibnility principle)
   case Msg.Msg of
     LB_ADDSTRING, LB_INSERTSTRING:
       begin
+        FItemsHeightValid := False;
         ItemWidth := Canvas.TextWidth(StrPas(PChar(Msg.LParam)) + ' ');
         if FMaxWidth < ItemWidth then
           FMaxWidth := ItemWidth;
-        SendMessage(Handle, LB_SETHORIZONTALEXTENT, FMaxWidth, 0);
+        if ScrollBars in [ssBoth, ssHorizontal] then
+           SendMessage(Handle, LB_SETHORIZONTALEXTENT, FMaxWidth, 0);
       end;
     LB_DELETESTRING:
       begin
+        FItemsHeightValid := False;
         if Msg.WParam < WPARAM(ItemsShowing.Count) then
           ItemWidth := Canvas.TextWidth(ItemsShowing[Msg.WParam] + ' ')
         else
@@ -2365,9 +2377,13 @@ begin
         end;
       end;
     LB_RESETCONTENT:
-      SendMessage(Handle, LB_SETHORIZONTALEXTENT, 0, 0);
+      begin
+        FItemsHeightValid := False;
+        SendMessage(Handle, LB_SETHORIZONTALEXTENT, 0, 0);
+      end;
     WM_SETFONT:
       begin
+        FItemsHeightValid := False;
         inherited WndProc(Msg);
         Canvas.Font.Assign(Font);
         UpdateHorizontalExtent;
