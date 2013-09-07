@@ -38,10 +38,11 @@ uses
   Controls,
   FiltEdit, DesignEditors, DesignIntf,
   JvDsgnConsts,
+  {$IfDef CPU386}JvNTEventLog, {$EndIf}
   JvClipboardMonitor, JvClipboardViewer, JvHidControllerClass,
   JvDragDrop, JvDdeCmd, JvAppCommand, JvScreenSaveSuppress, JvWndProcHook, JvSysRequirements,
   JvMRUList, JvMRUManager, JvCommStatus, JvJoystick,
-  JvNTEventLog, JvRas32, JvAppInst, JvScreenSaver,
+  JvRas32, JvAppInst, JvScreenSaver,
   JvShellHook, JvSHFileOperation, JvSoundControl, JvChangeNotify, JvSearchFiles,
   JvPerfMon95, JvComputerInfoEx,
   JvChangeNotifyEditor, JvPerfStatEditor, JvTimerList, JvTimerListEditor,
@@ -68,7 +69,8 @@ begin
     TJvAppDdeCmd, TJvHidDeviceController, TJvDropTarget, TJvDragDrop, TJvAppCommand,
     TJvScreenSaveSuppressor, TJvSysRequirements]);
   RegisterComponents(RsPaletteSystem, [{TJvComputerInfo, // - do not register this component as default}
-    TJvSHFileOperation, TJvChangeNotify, TJvAppInstances, TJvNTEventLog,
+    TJvSHFileOperation, TJvChangeNotify, TJvAppInstances, 
+	{$IfDef CPU386} TJvNTEventLog, {$EndIf}
     TJvMailSlotServer, TJvMailSlotClient,
     TJvScreenSaver, TJvJoystick, TJvSoundControl,
     TJvPerfStat95, TJvComputerInfoEx, TJvDebugHandler]);
