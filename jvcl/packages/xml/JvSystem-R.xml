@@ -38,7 +38,7 @@
     <File Name="..\..\run\JvJoystick.pas" Targets="all" Formname="" Condition=""/>
     <File Name="..\..\run\JvMRUList.pas" Targets="all" Formname="" Condition=""/>
     <File Name="..\..\run\JvMRUManager.pas" Targets="all" Formname="" Condition=""/>
-    <File Name="..\..\run\JvNTEventLog.pas" Targets="all" Formname="" Condition=""/>
+    <File Name="..\..\run\JvNTEventLog.pas" Targets="all_win32" Formname="" Condition=""/>
     <File Name="..\..\run\JvPerfMon95.pas" Targets="all" Formname="" Condition=""/>
     <File Name="..\..\run\JvRas32.pas" Targets="all" Formname="" Condition=""/>
     <File Name="..\..\run\JvScreenResolution.pas" Targets="all" Formname="" Condition=""/>
