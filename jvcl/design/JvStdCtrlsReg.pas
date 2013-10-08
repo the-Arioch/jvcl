@@ -80,6 +80,7 @@ begin
   RegisterComponents(RsPaletteEdit, [TJvEdit,
     TJvMemo, TJvRichEdit, TJvMaskEdit, TJvCheckedMaskEdit, TJvComboEdit, TJvCalcEdit,
     TJvFilenameEdit, TJvDirectoryEdit, TJvSpinEdit, TJvDatePickerEdit, TJvDateEdit, TJvTimeEdit,
+    TJvxCurrencyEdit,
     TJvHotKey, TJvIPAddress]);
   RegisterComponents(RsPaletteImageAnimator, [TJvImage, TJvImageList]);
   RegisterComponents(RsPaletteBarPanel, [TJvPageControl,
