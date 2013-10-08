@@ -60,6 +60,7 @@ implementation
 
 uses
   SysUtils,
+  StrUtils,
   {$IFNDEF COMPILER12_UP}
   JvJCLUtils,
   {$ENDIF ~COMPILER12_UP}
@@ -73,7 +74,7 @@ type
   end;
 
 const
-  TargetDefines: array [0..7] of TTargetDefine =
+  TargetDefines: array [0..12] of TTargetDefine =
                 (
                   (TargetName: 'c6'; Define: 'VER140'),
                   (TargetName: 'd6'; Define: 'VER140'),
@@ -82,7 +83,12 @@ const
                   (TargetName: 'd10'; Define: 'VER180'),
                   (TargetName: 'd11'; Define: 'VER180,VER185'),
                   (TargetName: 'd12'; Define: 'VER200'),
-                  (TargetName: 'd14'; Define: 'VER210')
+                  (TargetName: 'd14'; Define: 'VER210'),
+                  (TargetName: 'd15'; Define: 'VER220'),
+                  (TargetName: 'd16'; Define: 'VER230'),
+                  (TargetName: 'd17'; Define: 'VER240'),
+                  (TargetName: 'd18'; Define: 'VER250'),
+                  (TargetName: 'd19'; Define: 'VER260')
                 );
 
 { TTarget }
@@ -91,6 +97,7 @@ constructor TTarget.Create(Node: TJclSimpleXmlElem);
 var
   I: Integer;
   Tmp: TStringList;
+  DelphiName: string;
 begin
   inherited Create;
   FName := AnsiLowerCase(Node.Properties.ItemNamed['name'].Value);
@@ -125,11 +132,20 @@ begin
   if Assigned(Node.Properties.ItemNamed['IsDotNet']) then
     FIsDotNet := Node.Properties.ItemNamed['IsDotNet'].BoolValue;
 
-  FDefines.Add('WIN32');
+  DelphiName := FName;
+  if EndsText('_x64', FName) then begin
+     FDefines.Add('WIN64');
+     SetLength(DelphiName, Length(DelphiName) - Length('_x64') );
+  end else begin
+     FDefines.Add('WIN32');
+  end;
+// Potential gotcha if new platforms would ever be added
+// Like with Delphi/LLVM or Lazarus
+
   FDefines.Add('CONDITIONALEXPRESSIONS');
 
   for I := Low(TargetDefines) to High(TargetDefines) do
-    if SameText(TargetDefines[I].TargetName, Name) then
+    if SameText(TargetDefines[I].TargetName, DelphiName) then
     begin
       Tmp := TStringList.Create;
       try

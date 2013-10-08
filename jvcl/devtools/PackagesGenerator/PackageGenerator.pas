@@ -1112,7 +1112,7 @@ begin
         outFile.SaveToFile(OutFileName)
       else
       begin
-        CopyFile(PChar(templateName), PChar(OutFileName), False);
+        Win32Check( CopyFile(PChar(templateName), PChar(OutFileName), False) );
         FileSetDate(OutFileName, DateTimeToFileDate(Now)); // adjust file time
       end;
     end
