@@ -87,6 +87,7 @@ begin
     'MergeFrame', TJvComponentFormProperty);
 
   RegisterComponentEditor(TJvPageManager, TJvPageManagerEditor);
+  RegisterComponentEditor(TJvMultiStringHolder, TJvMultiStringsEditor);
   RegisterComponentEditor(TJvStrHolder, TJvStringsEditor);
   RegisterComponentEditor(TJvDataEmbedded, TJvDataEmbeddedEditor);
 
