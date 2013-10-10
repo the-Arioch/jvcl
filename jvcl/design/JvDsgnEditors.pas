@@ -105,6 +105,11 @@ type
     function GetEditPropertyName: string; override;
   end;
 
+  TJvMultiStringsEditor = class(TJvBasePropertyEditor)
+  protected
+    function GetEditPropertyName: string; override;
+  end;
+
   TJvItemsEditor = class(TJvBasePropertyEditor)
   protected
     function GetEditPropertyName: string; override;
@@ -921,6 +926,14 @@ end;
 function TJvStringsEditor.GetEditPropertyName: string;
 begin
   Result := 'Strings';
+end;
+
+
+//=== { TJvMultiStringsEditor } ==============================================
+
+function TJvMultiStringsEditor.GetEditPropertyName: string;
+begin
+  Result := 'MultipleStrings';
 end;
 
 //=== { TJvItemsEditor } =====================================================

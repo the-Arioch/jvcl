@@ -120,6 +120,7 @@ type
     procedure SetMacros(Value: TJvMacros);
     procedure RecreateMacros;
     procedure SetMacroChar(Value: Char);
+    class function XorDecode(const Key, Source: AnsiString): AnsiString; static;
   protected
     procedure AssignTo(Dest: TPersistent); override;
     procedure DefineProperties(Filer: TFiler); override;
@@ -773,6 +774,44 @@ begin
   Result := FStrings.Duplicates;
 end;
 
+class function TJvStrHolder.XorDecode(const Key, Source: AnsiString): AnsiString;
+// the one from JvJCLUtils was BROKEN on 10.09.2008 and should
+//     be AVOIDED to prevent data damage
+var
+  RI, LS, SI, LK, KI: Integer;
+  B: Byte;
+  HotSpot: String;
+begin
+  Result := '';
+  HotSpot := '$00';
+  LS := Length(Source); LK := Length(Key);
+  RI := 1; KI := 1; SI := 1;
+  SetLength(Result, (LS + 1) div 2 );
+
+  while SI <= LS do
+  begin
+    HotSpot[2] := Char(Source[SI]); Inc(SI);
+
+    if SI > LS // odd length of source
+       then SetLength(HotSpot, 2)
+       else HotSpot[3] := Char(Source[SI]);
+    Inc(SI);
+
+    B := StrToIntDef(HotSpot, 32);
+
+    if LK > 0 then begin
+       if KI > LK then KI := 1;
+       B := B xor Byte(AnsiChar(Key[KI]));
+       Inc(KI);
+    end;
+
+    Result[RI] := AnsiChar(B);
+    Inc(RI);
+  end;
+
+  SetLength(Result, RI - 1);
+end;
+
 procedure TJvStrHolder.ReadStrings(Reader: TReader);
 var
   Tmp: string;
@@ -791,9 +830,10 @@ begin
         if FReserved >= XorVersion then
           Strings.Add(XorDecodeString(KeyString, Tmp))
         else
-          {$WARNINGS OFF} // XorDecode is deprecated, but we need it for backward compatibility, so hide the warning
-          Strings.Add(XorDecode(KeyString, Tmp));
-          {$WARNINGS ON}
+          Strings.Add(string(XorDecode(
+                         AnsiString(KeyString),
+                         AnsiString(Tmp)
+          )));
       end
       else
         Strings.Add(string(XorString(ShortString(KeyString), ShortString(Tmp))));

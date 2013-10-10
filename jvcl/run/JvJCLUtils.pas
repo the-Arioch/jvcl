@@ -645,10 +645,17 @@ function IsWild(InputStr, Wilds: string; IgnoreCase: Boolean): Boolean;
 { IsWild compares InputString with WildCard string and returns True
   if corresponds. }
 function XorString(const Key, Src: ShortString): ShortString;
-function XorEncode(const Key, Source: string): string;
-  {$IFDEF SUPPORTS_DEPRECATED}deprecated{$IFDEF SUPPORTS_DEPRECATED_DETAILS} 'use XorEncodeString that has support for non-ASCII chars'{$ENDIF};{$ENDIF}
-function XorDecode(const Key, Source: string): string;
-  {$IFDEF SUPPORTS_DEPRECATED}deprecated{$IFDEF SUPPORTS_DEPRECATED_DETAILS} 'use XorEncodeString that has support for non-ASCII chars'{$ENDIF};{$ENDIF}
+
+//  Those two functions were broekn in Spetember 2008
+//  If anyone used them with Delphi 2009+ his data 
+//   might be DAMAGED one way or another or both
+//   http://issuetracker.delphi-jedi.org/view.php?id=5735
+//
+//function XorEncode(const Key, Source: string): string;
+//  use XorEncodeString that has support for non-ASCII chars
+//function XorDecode(const Key, Source: string): string;
+//  use XorEncodeString that has support for non-ASCII chars
+
 function XorEncodeString(const Key, Source: string): string;
 function XorDecodeString(const Key, Source: string): string;
 
@@ -5752,39 +5759,6 @@ begin
   if Length(Key) > 0 then
     for I := 1 to Length(Src) do
       Result[I] := AnsiChar(Chr(Byte(Key[1 + ((I - 1) mod Length(Key))]) xor Ord(Src[I])));
-end;
-
-function XorEncode(const Key, Source: string): string;
-var
-  I, KeyLen: Integer;
-  C: Byte;
-begin
-  Result := '';
-  KeyLen := Length(Key);
-  for I := 1 to Length(Source) do
-  begin
-    if KeyLen > 0 then
-      C := Byte(Key[1 + ((I - 1) mod KeyLen)]) xor Byte(Source[I])
-    else
-      C := Byte(Source[I]);
-    Result := Result + AnsiLowerCase(IntToHex(C, 2));
-  end;
-end;
-
-function XorDecode(const Key, Source: string): string;
-var
-  I, KeyLen: Integer;
-  C: Char;
-begin
-  Result := '';
-  KeyLen := Length(Key);
-  for I := 0 to Length(Source) div 2 - 1 do
-  begin
-    C := Char(StrToIntDef('$' + string(Source[I * 2 + 1] + Source[I * 2 + 2]), Ord(' ')));
-    if KeyLen > 0 then
-      C := Char(Byte(Key[1 + (I mod KeyLen)]) xor Byte(C));
-    Result := Result + C;
-  end;
 end;
 
 function XorEncodeString(const Key, Source: string): string;
