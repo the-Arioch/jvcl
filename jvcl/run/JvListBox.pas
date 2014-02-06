@@ -156,6 +156,7 @@ type
     FShowFocusRect: Boolean;
     FSelectedTextColor: TColor;
     FSelectedColor: TColor;
+    FSelectedColorIgnored: Boolean;
     FDisabledTextColor: TColor;
     FBackground: TJvListBoxBackground;
     FLeftPosition: Integer;
@@ -191,6 +192,7 @@ type
     procedure SetMultiline(const Value: Boolean);
     procedure SetSelectedColor(const Value: TColor);
     procedure SetSelectedTextColor(const Value: TColor);
+    procedure SetSelectedColorIgnored(const Value: Boolean);
     procedure SetShowFocusRect(const Value: Boolean);
     procedure SetDisabledTextColor(const Value: TColor);
     procedure SetMaxWidth(const Value: Integer);
@@ -220,8 +222,7 @@ type
     procedure SetConsumerService(Value: TJvDataConsumer);
     procedure ConsumerServiceChanging(Sender: TJvDataConsumer; Reason: TJvDataConsumerChangeReason);
     procedure ConsumerServiceChanged(Sender: TJvDataConsumer; Reason: TJvDataConsumerChangeReason);
-    procedure ConsumerSubServiceCreated(Sender: TJvDataConsumer;
-      SubSvc: TJvDataConsumerAggregatedObject);
+    procedure ConsumerSubServiceCreated(Sender: TJvDataConsumer; SubSvc: TJvDataConsumerAggregatedObject);
     function IsProviderSelected: Boolean;
     function IsProviderToggle: Boolean;
     procedure DeselectProvider;
@@ -235,22 +236,19 @@ type
     procedure LBGetTextLen(var Msg: TMessage); message LB_GETTEXTLEN;
 
     procedure DoStartDrag(var DragObject: TDragObject); override;
-    procedure DragOver(Source: TObject; X, Y: Integer; State: TDragState;
-      var Accept: Boolean); override;
+    procedure DragOver(Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean); override;
     function DoEraseBackground(Canvas: TCanvas; Param: LPARAM): Boolean; override;
     procedure MouseEnter(Control: TControl); override;
     procedure MouseLeave(Control: TControl); override;
     procedure SelectCancel(var Msg: TMessage); message LBN_SELCANCEL;
     procedure Changed; virtual;
-    procedure DrawItem(Index: Integer; Rect: TRect;
-      State: TOwnerDrawState); override;
+    procedure DrawItem(Index: Integer; Rect: TRect; State: TOwnerDrawState); override;
     procedure MeasureItem(Index: Integer; var Height: Integer); override;
     procedure RemeasureAll;
     procedure DoBackgroundChange(Sender: TObject);
 
     procedure Loaded; override;
-    procedure DrawProviderItem(Canvas: TCanvas; Rect: TRect; Index: Integer;
-      State: TOwnerDrawState);
+    procedure DrawProviderItem(Canvas: TCanvas; Rect: TRect; Index: Integer; State: TOwnerDrawState);
     procedure DoGetText(Index: Integer; var AText: string); virtual;
 
     property LimitToClientWidth: Boolean read GetLimitToClientWidth;
@@ -258,8 +256,7 @@ type
     property ScrollBars: TScrollStyle read FScrollBars write SetScrollBars default ssBoth;
     property Sorted: Boolean read FSorted write SetSorted default False;
     property OnGetText: TJvListBoxDataEvent read FOnGetText write FOnGetText;
-    property Alignment: TAlignment read FAlignment write SetAlignment
-      default taLeftJustify;
+    property Alignment: TAlignment read FAlignment write SetAlignment default taLeftJustify;
     property HotTrack: Boolean read FHotTrack write SetHotTrack default False;
     property OnSelectCancel: TNotifyEvent read FOnSelectCancel write FOnSelectCancel;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
@@ -286,10 +283,8 @@ type
     procedure MeasureProviderItem(Index, WidthAvail: Integer; var ASize: TSize);
     procedure MeasureString(const S: string; WidthAvail: Integer; var ASize: TSize);
 
-    procedure DefaultDrawItem(Index: Integer; ARect: TRect;
-      State: TOwnerDrawState); virtual;
-    procedure DefaultDragOver(Source: TObject; X, Y: Integer; State: TDragState;
-      var Accept: Boolean); virtual;
+    procedure DefaultDrawItem(Index: Integer; ARect: TRect;  State: TOwnerDrawState); virtual;
+    procedure DefaultDragOver(Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean); virtual;
     procedure DefaultStartDrag(var DragObject: TDragObject); virtual;
     procedure DefaultDragDrop(Source: TObject; X, Y: Integer); virtual;
     procedure CreateDragImage(const S: string);
@@ -314,6 +309,7 @@ type
     procedure SetBounds(ALeft, ATop, AWidth, AHeight: Integer); override;
   protected
     property MultiLine: Boolean read FMultiline write SetMultiline default False;
+    property SelectedColorIgnored: Boolean read FSelectedColorIgnored write SetSelectedColorIgnored default False;
     property SelectedColor: TColor read FSelectedColor write SetSelectedColor default clHighlight;
     property SelectedTextColor: TColor read FSelectedTextColor write SetSelectedTextColor default clHighlightText;
     property DisabledTextColor: TColor read FDisabledTextColor write SetDisabledTextColor default clGrayText;
@@ -354,6 +350,7 @@ type
     property MultiLine;
     property SeparateItems;
     property ColorAlternate;
+    property SelectedColorIgnored;
     property SelectedColor;
     property SelectedTextColor;
     property DisabledTextColor;
@@ -506,7 +503,7 @@ end;
 procedure TJvListBoxStrings.Put(Index: Integer; const S: string);
 var
   I: Integer;
-  TempData: Longint;
+  TempData: LPARAM;
 begin
   if UseInternal then
     InternalList[Index] := S
@@ -641,7 +638,7 @@ end;
 procedure TJvListBoxStrings.Move(CurIndex, NewIndex: Integer);
 var
   TempString: string;
-  TempData: Longint;
+  TempData: LPARAM;
 begin
   if (csLoading in ListBox.ComponentState) and UseInternal then
     InternalList.Move(CurIndex, NewIndex)
@@ -734,8 +731,6 @@ begin
 end;
 
 //=== { TJvCustomListBox } ===================================================
-
-const JvCustomListBox_ItemsSepGap = 10;
 
 constructor TJvCustomListBox.Create(AOwner: TComponent);
 var
@@ -849,6 +844,9 @@ begin
   with Msg.DrawItemStruct^ do
   begin
     State := TOwnerDrawState(Word(itemState and $FFFF));
+    if odSelected in State then // already in CPU registers - faster check
+       if FSelectedColorIgnored then
+          Exclude( State, odSelected );
     Canvas.Handle := hDC;
     Canvas.Font := Font;
     Canvas.Brush := Brush;
@@ -1104,7 +1102,7 @@ var
  end;
 begin
   if csDestroying in ComponentState then
-     Exit;
+    Exit;
  // JvBMPListBox:
   // draw text transparently
   if ScrollBars in [ssHorizontal, ssBoth] then
@@ -1132,15 +1130,18 @@ begin
     RestoreDC(Canvas.Handle, -1);
   end;
 
-  if Index < ItemsShowing.Count then
+  if Index < ItemsShowing.Count then  // do we need to check Index >= 0 ?
   begin
-    begin
-      if ColorAlternate <> Color then
+    if not Background.DoDraw then
+    begin  // do we largely clone color setting from TJvCustomListBox.CNDrawItem ?
+      if (not (odSelected in State)) and (ColorAlternate <> Color) then begin
         if Odd(Index) then
-          Canvas.Brush.Color := ColorAlternate
+          AColor := Self.ColorAlternate
         else
-          Canvas.Brush.Color := Color;
-       Canvas.FillRect(ActualRect);
+          AColor := Self.Color;
+        Canvas.Brush.Color := AColor;
+      end;
+      Canvas.FillRect(ActualRect);
     end;
 
     if FMultiline then
@@ -1153,7 +1154,13 @@ begin
     If ItemHasSeparator(Index) then
     begin
       // This sequence has to be executed before "UseRightToLeftAlignment" check
-      //   below would cripple ActualRect horizontal coordinates!
+      //   if below would cripple ActualRect horizontal coordinates and the picture
+      //   would be rather unpleasant:
+      //
+      //   Main Color background of prev. item
+      //   Alter-color background line 1px  ( THIS we have to eliminate )
+      //   Separator black line 1px
+      //   Alter-color background of next item
 
       Dec(ActualRect.Bottom, 3);
 
@@ -1179,8 +1186,8 @@ begin
     else
       Dec(ActualRect.Right, 2);
 
-    if ItemHasSeparator(Index) then
-      Dec(ActualRect.Bottom, 3);
+//    if ItemHasSeparator(Index) then  // done above already
+//      Dec(ActualRect.Bottom, 3);
 
     if IsProviderSelected then
       DrawProviderItem(Canvas, ActualRect, Index, State)
@@ -1200,7 +1207,7 @@ begin
       InvertRect(Canvas.Handle, ActualRect);
     // no need to draw focus rect, CNDrawItem does that for us
 
-    if ItemHasSeparator(Index) then
+ (*   if ItemHasSeparator(Index) then
     begin
       Canvas.Pen.Style := psSolid;
       Canvas.Pen.Mode  := pmCopy;
@@ -1219,7 +1226,7 @@ begin
       else
         AColor := Color;
       DrawSeparatorBar(+3);
-  end;
+    end; *)
   end;
 end;
 
@@ -1615,7 +1622,7 @@ begin
   FItemsHeightValid := false;
   if WindowHandle <> 0 then
      InvalidateRect(WindowHandle, nil, True);
-// Width might had changed - affecting the heights.
+// Width might had changed - affectting the heights.
 // That means both background and items
 // potentially need to be redrawn.
 end;
@@ -2132,6 +2139,18 @@ begin
   begin
     FSelectedColor := Value;
     Invalidate;
+  end;
+end;
+
+procedure TJvCustomListBox.SetSelectedColorIgnored(const Value: Boolean);
+begin
+  // (True == +1 {Borland}) <> ( True == -1 {Microsoft}) <> (True == 2,3,4,...)
+  // Better safe than sorry
+  if FSelectedColorIgnored xor Value then
+  begin
+    FSelectedColorIgnored := Value;
+    if SelCount > 0 then
+       Invalidate;
   end;
 end;
 
