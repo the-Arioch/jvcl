@@ -163,7 +163,7 @@ implementation
 
 uses
   SysUtils, Forms, ActnList, ImgList,
-  JvConsts, JvThemes, JvJCLUtils;
+  JvConsts, JvThemes, JvJCLUtils, JvJVCLUtils;
 
 type
   TGlyphList = class(TImageList)
@@ -235,33 +235,33 @@ begin
   Canvas.LineTo(X2, Y2);
 end;
 
-// (rom) best move to JCL
-
-procedure GrayBitmap(Bmp: TBitmap);
-var
-  I, J, W, H: Integer;
-  ColT: TColor;
-  Col: TColor;
-begin
-  if Bmp.Empty then
-    Exit;
-
-  W := Bmp.Width;
-  H := Bmp.Height;
-  ColT := Bmp.Canvas.Pixels[0, 0];
-
-  // (rom) speed up by using Scanline
-  for I := 0 to W do
-    for J := 0 to H do
-    begin
-      Col := Bmp.Canvas.Pixels[I, J];
-      if (Col <> clWhite) and (Col <> ColT) then
-        Col := clBlack
-      else
-        Col := ColT;
-      Bmp.Canvas.Pixels[I, J] := Col;
-    end;
-end;
+//// (rom) best move to JCL
+//
+//procedure GrayBitmap(Bmp: TBitmap);
+//var
+//  I, J, W, H: Integer;
+//  ColT: TColor;
+//  Col: TColor;
+//begin
+//  if Bmp.Empty then
+//    Exit;
+//
+//  W := Bmp.Width;
+//  H := Bmp.Height;
+//  ColT := Bmp.Canvas.Pixels[0, 0];
+//
+//  // (rom) speed up by using Scanline
+//  for I := 0 to W do
+//    for J := 0 to H do
+//    begin
+//      Col := Bmp.Canvas.Pixels[I, J];
+//      if (Col <> clWhite) and (Col <> ColT) then
+//        Col := clBlack
+//      else
+//        Col := ColT;
+//      Bmp.Canvas.Pixels[I, J] := Col;
+//    end;
+//end;
 
 //=== { TGlyphList } =========================================================
 
@@ -516,7 +516,6 @@ begin
           MonoBmp := nil;
           DDB := nil;
           try
-            MonoBmp := TBitmap.Create;
             DDB := TBitmap.Create;
             DDB.Assign(FOriginal);
             DDB.HandleType := bmDDB;
@@ -524,6 +523,7 @@ begin
               with TmpImage.Canvas do
               begin { Change white & gray to clBtnHighlight and clBtnShadow }
                 CopyRect(IRect, DDB.Canvas, ORect);
+                MonoBmp := TBitmap.Create;
                 MonoBmp.Monochrome := True;
                 MonoBmp.Width := IWidth;
                 MonoBmp.Height := IHeight;
@@ -561,10 +561,11 @@ begin
             else
             begin
               { Create a disabled version }
+              MonoBmp := CreateDisabledBitmap_NewStyle(FOriginal, FOriginal.Canvas.Pixels[0, 0]);
               with MonoBmp do
               begin
-                Assign(FOriginal);
-                GrayBitmap(MonoBmp);
+//                Assign(FOriginal);
+//                GrayBitmap(MonoBmp);
                 HandleType := bmDDB;
                 Canvas.Brush.Color := clBlack;
                 Width := IWidth;
