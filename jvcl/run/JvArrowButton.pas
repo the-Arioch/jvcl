@@ -432,7 +432,7 @@ procedure TButtonGlyph.GlyphChanged(Sender: TObject);
 begin
   if Sender = FOriginal then
   begin
-    FTransparentColor := FOriginal.TransparentColor;
+    FTransparentColor := FOriginal.TransparentColor and not PaletteMask;
     Invalidate;
     if Assigned(FOnChange) then
       FOnChange(Self);
@@ -561,37 +561,41 @@ begin
             else
             begin
               { Create a disabled version }
-              MonoBmp := CreateDisabledBitmap_NewStyle(FOriginal, FOriginal.Canvas.Pixels[0, 0]);
-              with MonoBmp do
-              begin
+              MonoBmp := CreateDisabledBitmap(FOriginal,
+                           clDefault);
+//              MonoBmp := CreateDisabledBitmap_NewStyle(FOriginal,
+//                           clDefault);
+//              with MonoBmp do
+//              begin
 //                Assign(FOriginal);
 //                GrayBitmap(MonoBmp);
-                HandleType := bmDDB;
-                Canvas.Brush.Color := clBlack;
-                Width := IWidth;
-                if Monochrome then
-                begin
-                  Canvas.Font.Color := clWhite;
-                  Monochrome := False;
-                  Canvas.Brush.Color := clWhite;
-                end;
-                Monochrome := True;
-              end;
-              with TmpImage.Canvas do
-              begin
-                Brush.Color := clBtnFace;
-                FillRect(IRect);
-                Brush.Color := clBtnHighlight;
-                SetTextColor(Handle, clBlack);
-                SetBkColor(Handle, clWhite);
-                BitBlt(Handle, 1, 1, IWidth, IHeight,
-                  MonoBmp.Canvas.Handle, 0, 0, ROP_DSPDxax);
-                Brush.Color := clBtnShadow;
-                SetTextColor(Handle, clBlack);
-                SetBkColor(Handle, clWhite);
-                BitBlt(Handle, 0, 0, IWidth, IHeight,
-                  MonoBmp.Canvas.Handle, 0, 0, ROP_DSPDxax);
-              end;
+//                HandleType := bmDDB;
+//                Canvas.Brush.Color := clBlack;
+//                Width := IWidth;
+//                if Monochrome then
+//                begin
+//                  Canvas.Font.Color := clWhite;
+//                  Monochrome := False;
+//                  Canvas.Brush.Color := clWhite;
+//                end;
+//                Monochrome := True;
+//              end;
+//              with TmpImage.Canvas do
+//              begin
+//                Brush.Color := clBtnFace;
+//                FillRect(IRect);
+//                Brush.Color := clBtnHighlight;
+//                SetTextColor(Handle, clBlack);
+//                SetBkColor(Handle, clWhite);
+//                BitBlt(Handle, 1, 1, IWidth, IHeight,
+//                  MonoBmp.Canvas.Handle, 0, 0, ROP_DSPDxax);
+//                Brush.Color := clBtnShadow;
+//                SetTextColor(Handle, clBlack);
+//                SetBkColor(Handle, clWhite);
+//                BitBlt(Handle, 0, 0, IWidth, IHeight,
+//                  MonoBmp.Canvas.Handle, 0, 0, ROP_DSPDxax);
+//              end;
+               TmpImage.Assign(MonoBmp);
             end;
           finally
             DDB.Free;
