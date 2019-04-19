@@ -306,6 +306,7 @@ type
     property OnGetSiteInfo;
     property OnStartDock;
     property OnUnDock;
+	property BevelKind;
     property BevelEdges;
     property BevelInner;
     property BevelOuter;
