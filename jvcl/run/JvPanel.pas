@@ -183,9 +183,9 @@ type
     procedure IJvHotTrack_Assign(Source: IJvHotTrack);
     procedure IJvHotTrack.Assign = IJvHotTrack_Assign;
   protected
-    procedure DrawCaption; dynamic;
-    procedure DrawCaptionTo(ACanvas: TCanvas ); dynamic;
-    procedure DrawBorders; dynamic;
+    procedure DrawCaption; virtual;
+    procedure DrawCaptionTo(ACanvas: TCanvas ); virtual;
+    procedure DrawBorders; virtual;
 
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
@@ -267,6 +267,7 @@ type
     property Sizeable;
     property HintColor;
     property Transparent;
+    property VerticalAlignment; // property exists in XE2 VCL TPanel - when was it introduced?
     property ShowCaption; // property exists in XE2 VCL TPanel - when was it introduced?
     property ShowAccelChar;
     property MultiLine;
@@ -838,12 +839,15 @@ end;
 
 procedure TJvCustomArrangePanel.DrawCaptionTo(ACanvas: TCanvas );
 const
+  VerticalAlignments: array[TVerticalAlignment] of Longint = (DT_TOP, DT_BOTTOM, DT_VCENTER);
   Alignments: array [TAlignment] of Longint = (DT_LEFT, DT_RIGHT, DT_CENTER);
   WordWrap: array [Boolean] of Longint = (DT_SINGLELINE, DT_WORDBREAK);
 var
-  ATextRect: TRect;
+  ATextRect, ACalcRect: TRect;
   BevelSize: Integer;
-  Flags: Longint;
+  Flags: Cardinal;
+  GDI_Vertical_Multiline: boolean;
+  dtp: TDrawTextParams;
 begin
   with ACanvas do
   begin
@@ -864,26 +868,53 @@ begin
       if BevelInner <> bvNone then
         Inc(BevelSize, BevelWidth);
       InflateRect(ATextRect, -BevelSize, -BevelSize);
-      Flags := DT_EXPANDTABS or WordWrap[MultiLine] or Alignments[Alignment];
-      if not ShowAccelChar then Flags := Flags or DT_NOPREFIX;
+
+      // Windows only can position text vertically when DT_SINGLELINE is enforced
+      //   (meaning, Windows would ignore even explicit #13#10 in Caption text)
+      GDI_Vertical_Multiline := MultiLine and (VerticalAlignment <> taAlignTop);
+
+      Flags := DT_EXPANDTABS or WordWrap[MultiLine] or Alignments[Alignment]
+                 or VerticalAlignments[VerticalAlignment];
+      if not ShowAccelChar then
+         Flags := Flags or DT_NOPREFIX;
       Flags := DrawTextBiDiModeFlags(Flags);
-      //calculate required rectangle size
-      DrawText(ACanvas.Handle, Caption, -1, ATextRect, Flags or DT_CALCRECT);
-      // adjust the rectangle placement
-      OffsetRect(ATextRect, 0, -ATextRect.Top + (Height - (ATextRect.Bottom - ATextRect.Top)) div 2);
-      case Alignment of
-        taRightJustify:
-          OffsetRect(ATextRect, -ATextRect.Left + (Width - (ATextRect.Right - ATextRect.Left) - BorderWidth -
-            BevelSize), 0);
-        taCenter:
-          OffsetRect(ATextRect, -ATextRect.Left + (Width - (ATextRect.Right - ATextRect.Left)) div 2, 0);
+
+      FillChar(dtp, SizeOf(dtp), 0);
+      dtp.cbSize := SizeOf(dtp);
+      dtp.iTabLength := 8; // default according to MSDN on GDI DrawText function
+
+      // Windows clips off the rightmost letters of italic text when right-aligned
+      //   using pre-Win2000 GDI DrawText(...) - see VCL stock TPanel
+      if (Alignment = taRightJustify) and (fsItalic in Font.Style) then begin
+         if UseRightToLeftAlignment // someone from Far East needed to check it
+            then dtp.iLeftMargin  := TextWidth('W') div 2
+            else dtp.iRightMargin := TextWidth('W') div 2;
+      end;
+
+      // do we need custom sizing to compensate for GDI shortcomings?
+      if GDI_Vertical_Multiline then begin
+        //calculate required rectangle size
+        ACalcRect := ATextRect;
+        DrawText(ACanvas.Handle, Caption, -1, ACalcRect, Flags or DT_CALCRECT);
+
+        if GDI_Vertical_Multiline then begin
+           Dec(ACalcRect.Top, ACalcRect.Bottom); // negative new width
+           Inc(ACalcRect.Top, ATextRect.Bottom); // bottom-alignment top
+           case VerticalAlignment of
+             taAlignBottom:    
+               ATextRect.Top := ACalcRect.Top;
+             taVerticalCenter: 
+               ATextRect.Top := (ATextRect.Top + ACalcRect.Top) div 2; // average 
+             else ;  // explicitly fall back to default action
+           end;
+        end;
       end;
       if not Enabled then
         Font.Color := clGrayText;
       //draw text
       if Transparent then
         SetBkMode(ACanvas.Handle, BkModeTransparent);
-      DrawText(ACanvas.Handle, Caption, -1, ATextRect, Flags);
+      DrawTextEx(ACanvas, Caption, -1, ATextRect, Flags, @dtp);
     end;
   end;
 end;
