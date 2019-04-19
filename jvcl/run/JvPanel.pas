@@ -134,6 +134,7 @@ type
     FTransparent: Boolean;
     FFlatBorder: Boolean;
     FFlatBorderColor: TColor;
+    FShowAccelChar: Boolean;
     FMultiLine: Boolean;
     FSizeable: Boolean;
     FDragging: Boolean;
@@ -167,6 +168,7 @@ type
     procedure SetFlatBorder(const Value: Boolean);
     procedure SetFlatBorderColor(const Value: TColor);
     procedure SetMultiLine(const Value: Boolean);
+    procedure SetShowAccelChar(const Value: Boolean);
     procedure SetSizeable(const Value: Boolean);
 
     {IJvHotTrack}   //added by dejoy 2005-04-28
@@ -230,6 +232,7 @@ type
     property Sizeable: Boolean read FSizeable write SetSizeable default False;
     property Transparent: Boolean read FTransparent write SetTransparent default False;
     property MultiLine: Boolean read FMultiLine write SetMultiLine default False;
+    property ShowAccelChar: Boolean read FShowAccelChar write SetShowAccelChar default True;
     //FlatBorder used the BorderWidth to draw the border
     property FlatBorder: Boolean read FFlatBorder write SetFlatBorder default False;
     property FlatBorderColor: TColor read FFlatBorderColor write SetFlatBorderColor default clBtnShadow;
@@ -264,6 +267,8 @@ type
     property Sizeable;
     property HintColor;
     property Transparent;
+    property ShowCaption; // property exists in XE2 VCL TPanel - when was it introduced?
+    property ShowAccelChar;
     property MultiLine;
     property FlatBorder;
     property FlatBorderColor;
@@ -593,6 +598,7 @@ begin
   inherited Create(AOwner);
   IncludeThemeStyle(Self, [csNeedsBorderPaint, csParentBackground]);
   FMultiLine := False;
+  FShowAccelChar := True;
   FTransparent := False;
   FFlatBorder := False;
   FFlatBorderColor := clBtnShadow;
@@ -826,7 +832,8 @@ end;
 
 procedure TJvCustomArrangePanel.DrawCaption;
 begin
-  DrawCaptionTo(Self.Canvas);
+  if ShowCaption then // property exists in XE2 VCL TPanel - when was it introduced?
+    DrawCaptionTo(Self.Canvas);
 end;
 
 procedure TJvCustomArrangePanel.DrawCaptionTo(ACanvas: TCanvas );
@@ -858,6 +865,7 @@ begin
         Inc(BevelSize, BevelWidth);
       InflateRect(ATextRect, -BevelSize, -BevelSize);
       Flags := DT_EXPANDTABS or WordWrap[MultiLine] or Alignments[Alignment];
+      if not ShowAccelChar then Flags := Flags or DT_NOPREFIX;
       Flags := DrawTextBiDiModeFlags(Flags);
       //calculate required rectangle size
       DrawText(ACanvas.Handle, Caption, -1, ATextRect, Flags or DT_CALCRECT);
@@ -996,6 +1004,15 @@ begin
   if FMultiLine <> Value then
   begin
     FMultiLine := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TJvCustomArrangePanel.SetShowAccelChar(const Value: Boolean);
+begin
+  if FShowAccelChar <> Value then
+  begin
+    FShowAccelChar := Value;
     Invalidate;
   end;
 end;
