@@ -4024,6 +4024,9 @@ var
   I, ALeftCol, LastColIndex: Integer;
   ScaleFactor: Double;
 begin
+  if WindowHandle = 0 then exit;
+  // Arioch: UIBDDataSet.Close -> Fields.Clear -> "AvailableWidth := ClientWidth" =>  recreateWnd
+  // XE2       recreateWnd -> AutoWidth -> Read fields -> AV in TDataSet.ActiveBuffer()
   if not AutoSizeColumns or FInAutoSize or (Columns.Count = 0) or (FGridState = gsColSizing) then
     Exit;
   FInAutoSize := True;

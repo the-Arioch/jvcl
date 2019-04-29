@@ -211,6 +211,7 @@ type
 
     { Current record position is restored after sorting }
     property RestoreOnSort: Boolean read FRestoreOnSort write FRestoreOnSort default True;
+
     { User can exclude columns from sorting. 'Fieldname1;Fieldname2;Fieldname3' }
     property SortExcludedFields: string read FSortExcludedFields write SetSortExcludedFields;
 
@@ -632,7 +633,7 @@ var
 begin
   if Assigned(FSortedFields) then
   begin
-    for SF := 0 to Length(FSortedFields) - 1 do
+//    for SF := 0 to Length(FSortedFields) - 1 do
       ChangeSortMarker(smNone);
     SetLength(FSortedFields, 0);
     Invalidate;
