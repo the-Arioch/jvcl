@@ -372,14 +372,14 @@ var
   ASize: TSize;
   R: TRect;
 begin
-  if (Parent = nil) or not AutoSize or (csDestroying in ComponentState) or
+  if (Parent = nil) or (not Parent.HandleAllocated) or not AutoSize or (csDestroying in ComponentState) or
     (csLoading in ComponentState) then
     Exit;
   ASize := GetDefaultCheckBoxSize;
   // add some spacing
   Inc(ASize.cy, 4);
   FCanvas.Font := Font;
-  R := Rect(0, 0, ClientWidth, ClientHeight);
+  R := ClientRect; // R := Rect(0, 0, ClientWidth, ClientHeight);
   // This is slower than GetTextExtentPoint but it does consider hotkeys
   if Caption <> '' then
   begin
